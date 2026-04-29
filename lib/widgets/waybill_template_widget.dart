@@ -9,8 +9,8 @@ class WaybillTemplateWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 850,
-      padding: const EdgeInsets.all(20),
+      width: 1120, // Landscape-style width
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: Colors.black, width: 1.2),
@@ -23,8 +23,74 @@ class WaybillTemplateWidget extends StatelessWidget {
           _buildPartySection(),
           _buildCargoSection(),
           _buildHazardSection(),
+          _buildConditionSection(),
           _buildDeliverySection(),
           _buildSignatureSection(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConditionSection() {
+    return Container(
+      height: 75,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: const BoxDecoration(
+        border: Border(
+          left: BorderSide(color: Colors.black),
+          right: BorderSide(color: Colors.black),
+          bottom: BorderSide(color: Colors.black),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'CONTAINERS OFF LOADED FROM VEHICLE - DEMURAGE & DOUBLE HAULAGE MAY APPLY',
+            style: TextStyle(
+              fontSize: 10,
+              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              _checkItem('OK', waybill.isOk),
+              _checkItem('SHORT', waybill.isShort),
+              _checkItem('OVER', waybill.isOver),
+              _checkItem('DAMAGED', waybill.isDamaged),
+              _checkItem('PARKING\nUNSUITABLE', waybill.isParkingUnsuitable),
+              _checkItem('PART\nORDER', waybill.isPartOrder),
+              _checkItem('COMPLETE\nORDER', waybill.isCompleteOrder),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _checkItem(String label, bool checked) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 18),
+      child: Row(
+        children: [
+          Container(
+            width: 18,
+            height: 18,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.black, width: 1),
+            ),
+            child: checked
+                ? const Icon(Icons.check, size: 15, color: Colors.black)
+                : null,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600),
+          ),
         ],
       ),
     );
@@ -36,31 +102,20 @@ class WaybillTemplateWidget extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            flex: 2,
+            flex: 4,
             child: Container(
-              height: 95,
+              height: 85,
               padding: const EdgeInsets.all(10),
               decoration: const BoxDecoration(
                 border: Border(right: BorderSide(color: Colors.black)),
               ),
               child: Row(
                 children: [
-                  Container(
-                    width: 70,
-                    height: 70,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.blue, width: 2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Text(
-                      'BAJ',
-                      style: TextStyle(
-                        color: Colors.blue,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                  Image.asset(
+                    'assets/images/baj_logo.png',
+                    width: 105,
+                    height: 65,
+                    fit: BoxFit.contain,
                   ),
                   const SizedBox(width: 14),
                   const Expanded(
@@ -71,7 +126,7 @@ class WaybillTemplateWidget extends StatelessWidget {
                         Text(
                           'BAJFREIGHT & LOGISTICS LIMITED',
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 20,
                             fontWeight: FontWeight.bold,
                             color: Colors.blue,
                           ),
@@ -92,14 +147,35 @@ class WaybillTemplateWidget extends StatelessWidget {
               ),
             ),
           ),
+
           Expanded(
+            flex: 2,
             child: Container(
-              height: 95,
-              padding: const EdgeInsets.all(10),
+              height: 85,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                border: Border(right: BorderSide(color: Colors.black)),
+              ),
+              child: const Text(
+                'WAYBILL',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 2,
+                ),
+              ),
+            ),
+          ),
+
+          Expanded(
+            flex: 3,
+            child: Container(
+              height: 85,
+              padding: const EdgeInsets.all(8),
               child: Column(
                 children: [
                   _smallHeaderInfo('BAJFREIGHT NO.', waybill.bajNumber),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
                   _smallHeaderInfo('WAYBILL NO.', waybill.waybillNumber),
                 ],
               ),
@@ -114,11 +190,13 @@ class WaybillTemplateWidget extends StatelessWidget {
     return Expanded(
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(6),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         decoration: BoxDecoration(border: Border.all(color: Colors.black)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [_label(label), const SizedBox(height: 3), _value(value)],
+        child: Row(
+          children: [
+            SizedBox(width: 105, child: _label(label)),
+            Expanded(child: _value(value)),
+          ],
         ),
       ),
     );
@@ -128,13 +206,13 @@ class WaybillTemplateWidget extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: _box(label: 'DATE', value: waybill.date, height: 60),
+          child: _box(label: 'DATE', value: waybill.date, height: 58),
         ),
         Expanded(
-          child: _box(label: 'P.O. NO.', value: waybill.poNumber, height: 60),
+          child: _box(label: 'P.O. NO.', value: waybill.poNumber, height: 58),
         ),
         Expanded(
-          child: _box(label: 'STATUS', value: waybill.status, height: 60),
+          child: _box(label: 'STATUS', value: waybill.status, height: 58),
         ),
       ],
     );
@@ -143,20 +221,28 @@ class WaybillTemplateWidget extends StatelessWidget {
   Widget _buildPartySection() {
     return Column(
       children: [
-        _box(
-          label: 'SHIPPING / VENDOR',
-          value: waybill.shippingVendor,
-          height: 65,
-        ),
-        _box(
-          label: 'CONSIGNEE / RECEIVER',
-          value: waybill.consigneeReceiver,
-          height: 65,
+        Row(
+          children: [
+            Expanded(
+              child: _box(
+                label: 'SHIPPING / VENDOR',
+                value: waybill.shippingVendor,
+                height: 65,
+              ),
+            ),
+            Expanded(
+              child: _box(
+                label: 'CONSIGNEE / RECEIVER',
+                value: waybill.consigneeReceiver,
+                height: 65,
+              ),
+            ),
+          ],
         ),
         _box(
           label: 'OTHER DELIVERY ADDRESS',
           value: waybill.deliveryAddress,
-          height: 70,
+          height: 65,
         ),
       ],
     );
@@ -167,27 +253,27 @@ class WaybillTemplateWidget extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          flex: 2,
+          flex: 3,
           child: _box(
             label: 'DESCRIPTION OF CARGO',
             value: waybill.cargoDescription,
-            height: 160,
+            height: 130,
           ),
         ),
         Expanded(
-          child: Column(
-            children: [
-              _box(
-                label: 'GROSS WEIGHT',
-                value: waybill.grossWeight,
-                height: 80,
-              ),
-              _box(
-                label: 'COMMENTS / SPECIAL INSTRUCTION',
-                value: waybill.comments,
-                height: 80,
-              ),
-            ],
+          flex: 1,
+          child: _box(
+            label: 'GROSS WEIGHT',
+            value: waybill.grossWeight,
+            height: 130,
+          ),
+        ),
+        Expanded(
+          flex: 2,
+          child: _box(
+            label: 'COMMENTS / SPECIAL INSTRUCTION',
+            value: waybill.comments,
+            height: 130,
           ),
         ),
       ],
@@ -198,18 +284,18 @@ class WaybillTemplateWidget extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          flex: 2,
+          flex: 3,
           child: _box(
             label: 'HAZARDOUS CARGO TYPE',
             value: waybill.hazardousCargoType,
-            height: 60,
+            height: 58,
           ),
         ),
         Expanded(
-          child: _box(label: 'UN', value: waybill.unNumber, height: 60),
+          child: _box(label: 'UN NUMBER', value: waybill.unNumber, height: 58),
         ),
         Expanded(
-          child: _box(label: 'TREMCARD', value: waybill.tremcard, height: 60),
+          child: _box(label: 'TREMCARD', value: waybill.tremcard, height: 58),
         ),
       ],
     );
@@ -222,21 +308,21 @@ class WaybillTemplateWidget extends StatelessWidget {
           child: _box(
             label: 'GOODS RECEIVED BY',
             value: waybill.receiverName,
-            height: 65,
+            height: 62,
           ),
         ),
         Expanded(
           child: _box(
             label: 'VEHICLE NO.',
             value: waybill.vehicleNumber,
-            height: 65,
+            height: 62,
           ),
         ),
         Expanded(
           child: _box(
             label: 'DRIVER NAME',
             value: waybill.driverName,
-            height: 65,
+            height: 62,
           ),
         ),
       ],
@@ -247,7 +333,12 @@ class WaybillTemplateWidget extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: _signatureBox(label: 'DRIVER SIGNATURE', value: ''),
+          child: _signatureBox(
+            label: 'DRIVER SIGNATURE',
+            value: waybill.driverSignatureUrl.isEmpty
+                ? ''
+                : 'Driver Signature Captured',
+          ),
         ),
         Expanded(
           child: _signatureBox(
@@ -258,7 +349,9 @@ class WaybillTemplateWidget extends StatelessWidget {
         Expanded(
           child: _signatureBox(
             label: 'RECEIVER SIGNATURE',
-            value: waybill.signatureUrl.isEmpty ? '' : 'Signature Captured',
+            value: waybill.signatureUrl.isEmpty
+                ? ''
+                : 'Receiver Signature Captured',
           ),
         ),
       ],
