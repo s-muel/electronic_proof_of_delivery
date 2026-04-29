@@ -4,6 +4,9 @@ import '../widgets/waybill_template_widget.dart';
 import 'edit_waybill_screen.dart';
 import '../services/waybill_service.dart';
 
+import 'package:printing/printing.dart';
+import '../services/pdf_service.dart';
+
 class WaybillDetailsScreen extends StatefulWidget {
   final WaybillModel waybill;
   final int index;
@@ -25,6 +28,15 @@ class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
   void initState() {
     super.initState();
     currentWaybill = widget.waybill;
+  }
+
+  Future<void> downloadPdf() async {
+    final pdfBytes = await PdfService.generateWaybillPdf(currentWaybill);
+
+    await Printing.layoutPdf(
+      name: 'Waybill_${currentWaybill.waybillNumber}.pdf',
+      onLayout: (_) async => pdfBytes,
+    );
   }
 
   void editWaybill() async {
@@ -51,6 +63,14 @@ class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
       appBar: AppBar(
         title: Text('Waybill No: ${currentWaybill.waybillNumber}'),
         actions: [
+          TextButton.icon(
+            onPressed: downloadPdf,
+            icon: const Icon(Icons.picture_as_pdf, color: Colors.green),
+            label: const Text(
+              'Download PDF',
+              style: TextStyle(color: Colors.green),
+            ),
+          ),
           if (canEdit)
             TextButton.icon(
               onPressed: editWaybill,
