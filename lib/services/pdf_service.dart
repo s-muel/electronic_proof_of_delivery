@@ -7,10 +7,23 @@ import 'package:pdf/widgets.dart' as pw;
 import '../models/waybill_model.dart';
 
 class PdfService {
-  static Future<Uint8List> generateWaybillPdf(WaybillModel waybill) async {
+  static Future<Uint8List> generateWaybillPdf(
+    WaybillModel waybill, {
+    Uint8List? receiverSignatureBytes,
+    Uint8List? driverSignatureBytes,
+  }) async {
     final pdf = pw.Document();
 
     pw.MemoryImage? logoImage;
+
+    final pw.MemoryImage? receiverSignatureImage =
+        receiverSignatureBytes != null
+        ? pw.MemoryImage(receiverSignatureBytes)
+        : null;
+
+    final pw.MemoryImage? driverSignatureImage = driverSignatureBytes != null
+        ? pw.MemoryImage(driverSignatureBytes)
+        : null;
 
     try {
       final logoBytes = await rootBundle.load('assets/images/baj_logo.png');
@@ -38,7 +51,11 @@ class PdfService {
                 _buildHazardSection(waybill),
                 _buildConditionSection(waybill),
                 _buildDeliverySection(waybill),
-                _buildSignatureSection(waybill),
+                _buildSignatureSection(
+                  waybill,
+                  receiverSignatureImage: receiverSignatureImage,
+                  driverSignatureImage: driverSignatureImage,
+                ),
                 _buildFooter(),
               ],
             ),
@@ -263,7 +280,7 @@ class PdfService {
           ),
         ),
         pw.Expanded(
-          child: _box(label: 'UN', value: waybill.unNumber, height: 42),
+          child: _box(label: 'UN NUMBER', value: waybill.unNumber, height: 42),
         ),
         pw.Expanded(
           child: _box(label: 'TREMCARD', value: waybill.tremcard, height: 42),
@@ -367,7 +384,11 @@ class PdfService {
     );
   }
 
-  static pw.Widget _buildSignatureSection(WaybillModel waybill) {
+  static pw.Widget _buildSignatureSection(
+    WaybillModel waybill, {
+    pw.MemoryImage? receiverSignatureImage,
+    pw.MemoryImage? driverSignatureImage,
+  }) {
     return pw.Row(
       children: [
         pw.Expanded(
@@ -376,6 +397,7 @@ class PdfService {
             value: waybill.driverSignatureUrl.isEmpty
                 ? ''
                 : 'Driver Signature Captured',
+            signatureImage: driverSignatureImage,
           ),
         ),
         pw.Expanded(
@@ -390,6 +412,7 @@ class PdfService {
             value: waybill.signatureUrl.isEmpty
                 ? ''
                 : 'Receiver Signature Captured',
+            signatureImage: receiverSignatureImage,
           ),
         ),
       ],
@@ -399,9 +422,10 @@ class PdfService {
   static pw.Widget _signatureBox({
     required String label,
     required String value,
+    pw.MemoryImage? signatureImage,
   }) {
     return pw.Container(
-      height: 60,
+      height: 65,
       padding: const pw.EdgeInsets.all(6),
       decoration: const pw.BoxDecoration(
         border: pw.Border(
@@ -413,12 +437,26 @@ class PdfService {
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           _label(label),
-          pw.Spacer(),
-          pw.Text(
-            value,
-            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+          pw.SizedBox(height: 4),
+          pw.Expanded(
+            child: signatureImage != null
+                ? pw.Image(
+                    signatureImage,
+                    fit: pw.BoxFit.contain,
+                    alignment: pw.Alignment.centerLeft,
+                  )
+                : pw.Align(
+                    alignment: pw.Alignment.bottomLeft,
+                    child: pw.Text(
+                      value,
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ),
           ),
-          pw.SizedBox(height: 5),
+          pw.SizedBox(height: 4),
           pw.Container(height: 1, color: PdfColors.black),
         ],
       ),

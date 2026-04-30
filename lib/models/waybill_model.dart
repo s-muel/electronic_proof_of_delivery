@@ -1,4 +1,9 @@
+import 'dart:typed_data';
+
 class WaybillModel {
+final Uint8List? receiverSignatureBytes;
+final Uint8List? driverSignatureBytes;
+
   final String bajNumber;
   final String waybillNumber;
   final String date;
@@ -32,6 +37,10 @@ class WaybillModel {
   final String invoicedAt;
 
   WaybillModel({
+
+this.receiverSignatureBytes,
+this.driverSignatureBytes,
+
     required this.bajNumber,
     required this.waybillNumber,
     required this.date,
@@ -132,6 +141,9 @@ class WaybillModel {
   }
 
   WaybillModel copyWith({
+Uint8List? receiverSignatureBytes,
+Uint8List? driverSignatureBytes,
+
     String? bajNumber,
     String? waybillNumber,
     String? date,
@@ -163,6 +175,9 @@ class WaybillModel {
     String? invoicedAt,
   }) {
     return WaybillModel(
+receiverSignatureBytes: receiverSignatureBytes ?? this.receiverSignatureBytes,
+driverSignatureBytes: driverSignatureBytes ?? this.driverSignatureBytes,
+
       bajNumber: bajNumber ?? this.bajNumber,
       waybillNumber: waybillNumber ?? this.waybillNumber,
       date: date ?? this.date,

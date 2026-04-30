@@ -29,15 +29,18 @@ class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
     super.initState();
     currentWaybill = widget.waybill;
   }
+Future<void> downloadPdf() async {
+  final pdfBytes = await PdfService.generateWaybillPdf(
+    currentWaybill,
+    receiverSignatureBytes: currentWaybill.receiverSignatureBytes,
+    driverSignatureBytes: currentWaybill.driverSignatureBytes,
+  );
 
-  Future<void> downloadPdf() async {
-    final pdfBytes = await PdfService.generateWaybillPdf(currentWaybill);
-
-    await Printing.layoutPdf(
-      name: 'Waybill_${currentWaybill.waybillNumber}.pdf',
-      onLayout: (_) async => pdfBytes,
-    );
-  }
+  await Printing.layoutPdf(
+    name: 'Waybill_${currentWaybill.waybillNumber}.pdf',
+    onLayout: (_) async => pdfBytes,
+  );
+}
 
   void editWaybill() async {
     final result = await Navigator.push(
@@ -87,7 +90,11 @@ class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
           child: Center(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              child: WaybillTemplateWidget(waybill: currentWaybill),
+              child: WaybillTemplateWidget(
+                waybill: currentWaybill,
+                receiverSignatureBytes: currentWaybill.receiverSignatureBytes,
+                driverSignatureBytes: currentWaybill.driverSignatureBytes,
+              ),
             ),
           ),
         ),

@@ -3,6 +3,9 @@ import '../models/waybill_model.dart';
 import '../services/waybill_service.dart';
 import '../widgets/waybill_template_widget.dart';
 
+import 'dart:typed_data';
+import 'signature_capture_screen.dart';
+
 class DriverDeliveryScreen extends StatefulWidget {
   final WaybillModel waybill;
   final int index;
@@ -19,6 +22,9 @@ class DriverDeliveryScreen extends StatefulWidget {
 
 class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
   final _formKey = GlobalKey<FormState>();
+
+  Uint8List? receiverSignatureBytes;
+  Uint8List? driverSignatureBytes;
 
   final receiverNameController = TextEditingController();
   final driverNameController = TextEditingController();
@@ -63,24 +69,45 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
     super.dispose();
   }
 
-  void captureReceiverSignature() {
-    setState(() {
-      receiverSignatureCaptured = true;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Receiver signature captured')),
+  Future<void> captureReceiverSignature() async {
+    final result = await Navigator.push<Uint8List>(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            const SignatureCaptureScreen(title: 'Receiver Signature'),
+      ),
     );
+
+    if (result != null) {
+      setState(() {
+        receiverSignatureBytes = result;
+        receiverSignatureCaptured = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Receiver signature captured')),
+      );
+    }
   }
 
-  void captureDriverSignature() {
-    setState(() {
-      driverSignatureCaptured = true;
-    });
-
-    ScaffoldMessenger.of(
+  Future<void> captureDriverSignature() async {
+    final result = await Navigator.push<Uint8List>(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Driver signature captured')));
+      MaterialPageRoute(
+        builder: (_) => const SignatureCaptureScreen(title: 'Driver Signature'),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        driverSignatureBytes = result;
+        driverSignatureCaptured = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Driver signature captured')),
+      );
+    }
   }
 
   bool get hasSelectedCondition {
@@ -150,6 +177,8 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
         isCompleteOrder: isCompleteOrder,
         signatureUrl: 'receiver-signature-captured-placeholder',
         driverSignatureUrl: 'driver-signature-captured-placeholder',
+        receiverSignatureBytes: receiverSignatureBytes,
+driverSignatureBytes: driverSignatureBytes,
         status: 'Delivered',
         deliveredAt: DateTime.now().toIso8601String(),
       );
@@ -325,7 +354,11 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
 
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
-                  child: WaybillTemplateWidget(waybill: getPreviewWaybill()),
+                  child: WaybillTemplateWidget(
+                    waybill: getPreviewWaybill(),
+                    receiverSignatureBytes: receiverSignatureBytes,
+                    driverSignatureBytes: driverSignatureBytes,
+                  ),
                 ),
               ],
             ),
@@ -393,6 +426,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
     return _signatureButton(
       title: 'Receiver Signature',
       isCaptured: receiverSignatureCaptured,
+      signatureBytes: receiverSignatureBytes,
       onTap: captureReceiverSignature,
     );
   }
@@ -401,6 +435,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
     return _signatureButton(
       title: 'Driver Signature',
       isCaptured: driverSignatureCaptured,
+      signatureBytes: driverSignatureBytes,
       onTap: captureDriverSignature,
     );
   }
@@ -409,12 +444,13 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
     required String title,
     required bool isCaptured,
     required VoidCallback onTap,
+    Uint8List? signatureBytes,
   }) {
     return InkWell(
       onTap: onTap,
       child: Container(
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
+        height: 80,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           border: Border.all(color: isCaptured ? Colors.green : Colors.grey),
           borderRadius: BorderRadius.circular(6),
@@ -430,13 +466,34 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                isCaptured ? '$title Captured' : 'Tap to Capture $title',
-                style: TextStyle(
-                  color: isCaptured ? Colors.green : Colors.black87,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              child: isCaptured && signatureBytes != null
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$title Captured',
+                          style: const TextStyle(
+                            color: Colors.green,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Expanded(
+                          child: Image.memory(
+                            signatureBytes,
+                            fit: BoxFit.contain,
+                            alignment: Alignment.centerLeft,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Text(
+                      'Tap to Capture $title',
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
             ),
           ],
         ),

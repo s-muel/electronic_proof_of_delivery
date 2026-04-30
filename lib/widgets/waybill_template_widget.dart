@@ -1,10 +1,20 @@
 import 'package:flutter/material.dart';
 import '../models/waybill_model.dart';
 
+import 'dart:typed_data';
+
 class WaybillTemplateWidget extends StatelessWidget {
   final WaybillModel waybill;
 
-  const WaybillTemplateWidget({super.key, required this.waybill});
+  final Uint8List? receiverSignatureBytes;
+  final Uint8List? driverSignatureBytes;
+
+  const WaybillTemplateWidget({
+    super.key,
+    required this.waybill,
+    this.receiverSignatureBytes,
+    this.driverSignatureBytes,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -338,6 +348,7 @@ class WaybillTemplateWidget extends StatelessWidget {
             value: waybill.driverSignatureUrl.isEmpty
                 ? ''
                 : 'Driver Signature Captured',
+            signatureBytes: driverSignatureBytes,
           ),
         ),
         Expanded(
@@ -352,6 +363,7 @@ class WaybillTemplateWidget extends StatelessWidget {
             value: waybill.signatureUrl.isEmpty
                 ? ''
                 : 'Receiver Signature Captured',
+            signatureBytes: receiverSignatureBytes,
           ),
         ),
       ],
@@ -386,9 +398,13 @@ class WaybillTemplateWidget extends StatelessWidget {
     );
   }
 
-  Widget _signatureBox({required String label, required String value}) {
+  Widget _signatureBox({
+    required String label,
+    required String value,
+    Uint8List? signatureBytes,
+  }) {
     return Container(
-      height: 90,
+      height: 110,
       padding: const EdgeInsets.all(8),
       decoration: const BoxDecoration(
         border: Border(
@@ -401,12 +417,28 @@ class WaybillTemplateWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _label(label),
-          const Spacer(),
-          Text(
-            value.isEmpty ? '' : value,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          const SizedBox(height: 4),
+          Expanded(
+            child: signatureBytes != null
+                ? Image.memory(
+                    signatureBytes,
+                    fit: BoxFit.contain,
+                    width: double.infinity,
+                    height: double.infinity,
+                    alignment: Alignment.centerLeft,
+                  )
+                : Align(
+                    alignment: Alignment.bottomLeft,
+                    child: Text(
+                      value,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Container(height: 1, color: Colors.black),
         ],
       ),
