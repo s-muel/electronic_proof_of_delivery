@@ -140,7 +140,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
     );
   }
 
-  void submitDelivery() {
+  Future<void> submitDelivery() async {
     if (_formKey.currentState!.validate()) {
       if (!hasSelectedCondition) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -178,13 +178,12 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
         signatureUrl: 'receiver-signature-captured-placeholder',
         driverSignatureUrl: 'driver-signature-captured-placeholder',
         receiverSignatureBytes: receiverSignatureBytes,
-driverSignatureBytes: driverSignatureBytes,
+        driverSignatureBytes: driverSignatureBytes,
         status: 'Delivered',
         deliveredAt: DateTime.now().toIso8601String(),
       );
 
-      WaybillService.updateWaybill(widget.index, updatedWaybill);
-
+      await WaybillService.updateWaybill(widget.index, updatedWaybill);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Delivery submitted successfully')),
       );

@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+
+
 class WaybillModel {
 final Uint8List? receiverSignatureBytes;
 final Uint8List? driverSignatureBytes;
@@ -74,6 +76,9 @@ this.driverSignatureBytes,
 
   Map<String, dynamic> toMap() {
     return {
+'receiverSignatureBytes': receiverSignatureBytes,
+'driverSignatureBytes': driverSignatureBytes,
+
       'bajNumber': bajNumber,
       'waybillNumber': waybillNumber,
       'date': date,
@@ -133,6 +138,8 @@ this.driverSignatureBytes,
       status: map['status'] ?? 'Pending Delivery',
       receiverName: map['receiverName'] ?? '',
       signatureUrl: map['signatureUrl'] ?? '',
+      receiverSignatureBytes: map['receiverSignatureBytes'],
+driverSignatureBytes: map['driverSignatureBytes'],
       driverSignatureUrl: map['driverSignatureUrl'] ?? '',
       createdAt: map['createdAt'] ?? '',
       deliveredAt: map['deliveredAt'] ?? '',

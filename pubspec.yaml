@@ -36,6 +36,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   printing: ^5.14.3
   signature: ^6.3.0
+  hive_flutter: ^1.1.0
 
 dev_dependencies:
   flutter_test:

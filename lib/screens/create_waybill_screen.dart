@@ -55,7 +55,7 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
     super.dispose();
   }
 
-  void saveWaybill() {
+  Future<void> saveWaybill() async {
     if (_formKey.currentState!.validate()) {
       final waybill = WaybillModel(
         bajNumber: bajNumberController.text.trim(),
@@ -76,7 +76,7 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
         tremcard: tremcardController.text.trim(),
       );
 
-      WaybillService.addWaybill(waybill);
+      await WaybillService.addWaybill(waybill);
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Waybill created successfully')),

@@ -35,16 +35,28 @@ class _DriverDashboardState extends State<DriverDashboard> {
     );
   }
 
-  void openWaybillDetails(int index, WaybillModel waybill) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => DriverDeliveryScreen(waybill: waybill, index: index),
+void openWaybillDetails(int index, WaybillModel waybill) async {
+  if (index == -1) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Could not find this waybill record'),
       ),
     );
-
-    loadPendingWaybills();
+    return;
   }
+
+  await Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => DriverDeliveryScreen(
+        waybill: waybill,
+        index: index,
+      ),
+    ),
+  );
+
+  loadPendingWaybills();
+}
 
   Color getStatusColor(String status) {
     switch (status) {
@@ -96,7 +108,9 @@ class _DriverDashboardState extends State<DriverDashboard> {
       itemCount: pendingWaybills.length,
       itemBuilder: (context, index) {
         final waybill = pendingWaybills[index];
-        final originalIndex = WaybillService.getAllWaybills().indexOf(waybill);
+        final originalIndex = WaybillService.getIndexByWaybillNumber(
+          waybill.waybillNumber,
+        );
 
         return Card(
           child: ListTile(
@@ -138,8 +152,8 @@ class _DriverDashboardState extends State<DriverDashboard> {
           DataColumn(label: Text('Action')),
         ],
         rows: pendingWaybills.map((waybill) {
-          final originalIndex = WaybillService.getAllWaybills().indexOf(
-            waybill,
+          final originalIndex = WaybillService.getIndexByWaybillNumber(
+            waybill.waybillNumber,
           );
 
           return DataRow(

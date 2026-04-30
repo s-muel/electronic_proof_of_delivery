@@ -76,7 +76,7 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
     super.dispose();
   }
 
-  void updateWaybill() {
+Future<void> updateWaybill() async {
     if (_formKey.currentState!.validate()) {
       final updatedWaybill = WaybillModel(
         bajNumber: bajNumberController.text.trim(),
@@ -104,7 +104,7 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
         invoicedAt: widget.waybill.invoicedAt,
       );
 
-      WaybillService.updateWaybill(widget.index, updatedWaybill);
+      await WaybillService.updateWaybill(widget.index, updatedWaybill);
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Waybill updated successfully')),

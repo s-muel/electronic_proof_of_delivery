@@ -70,13 +70,20 @@ class _AccountsDashboardState extends State<AccountsDashboard>
     loadWaybills();
   }
 
-  void markAsInvoiced(int index, WaybillModel waybill) {
+  Future<void> markAsInvoiced(int index, WaybillModel waybill) async {
+    if (index == -1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not find this waybill record')),
+      );
+      return;
+    }
+
     final updatedWaybill = waybill.copyWith(
       status: 'Invoiced',
       invoicedAt: DateTime.now().toIso8601String(),
     );
 
-    WaybillService.updateWaybill(index, updatedWaybill);
+    await WaybillService.updateWaybill(index, updatedWaybill);
 
     ScaffoldMessenger.of(
       context,
@@ -205,7 +212,10 @@ class _AccountsDashboardState extends State<AccountsDashboard>
       itemCount: waybills.length,
       itemBuilder: (context, index) {
         final waybill = waybills[index];
-        final originalIndex = WaybillService.getAllWaybills().indexOf(waybill);
+
+        final originalIndex = WaybillService.getIndexByWaybillNumber(
+          waybill.waybillNumber,
+        );
 
         return Card(
           child: ListTile(
@@ -270,10 +280,9 @@ class _AccountsDashboardState extends State<AccountsDashboard>
           DataColumn(label: Text('Actions')),
         ],
         rows: waybills.map((waybill) {
-          final originalIndex = WaybillService.getAllWaybills().indexOf(
-            waybill,
+          final originalIndex = WaybillService.getIndexByWaybillNumber(
+            waybill.waybillNumber,
           );
-
           return DataRow(
             cells: [
               DataCell(Text(waybill.waybillNumber)),
