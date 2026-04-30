@@ -11,29 +11,20 @@ class AccountsDashboard extends StatefulWidget {
   State<AccountsDashboard> createState() => _AccountsDashboardState();
 }
 
-class _AccountsDashboardState extends State<AccountsDashboard>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-
+class _AccountsDashboardState extends State<AccountsDashboard> {
+  List<WaybillModel> pendingWaybills = [];
   List<WaybillModel> deliveredWaybills = [];
   List<WaybillModel> invoicedWaybills = [];
 
   @override
   void initState() {
     super.initState();
-
-    _tabController = TabController(length: 2, vsync: this);
     loadWaybills();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
   }
 
   void loadWaybills() {
     setState(() {
+      pendingWaybills = WaybillService.getPendingWaybills();
       deliveredWaybills = WaybillService.getDeliveredWaybills();
       invoicedWaybills = WaybillService.getInvoicedWaybills();
     });
@@ -44,6 +35,216 @@ class _AccountsDashboardState extends State<AccountsDashboard>
       context,
       MaterialPageRoute(builder: (_) => const LoginScreen()),
     );
+  }
+
+  Future<void> openAccountsList({
+    required String title,
+    required List<WaybillModel> waybills,
+    required bool showMarkInvoicedButton,
+  }) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AccountsWaybillListScreen(
+          title: title,
+          waybills: waybills,
+          showMarkInvoicedButton: showMarkInvoicedButton,
+        ),
+      ),
+    );
+
+    loadWaybills();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isWideScreen = MediaQuery.of(context).size.width > 800;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Accounts Dashboard'),
+        actions: [
+          IconButton(
+            onPressed: loadWaybills,
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh Dashboard',
+          ),
+          IconButton(
+            onPressed: () => _logout(context),
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          loadWaybills();
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Waybill Summary',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+
+              const SizedBox(height: 16),
+
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: isWideScreen ? 3 : 1,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                childAspectRatio: isWideScreen ? 2.6 : 3.2,
+                children: [
+                  _SummaryCard(
+                    title: 'Pending Delivery',
+                    count: pendingWaybills.length,
+                    icon: Icons.pending_actions,
+                    color: Colors.orange,
+                  ),
+                  _SummaryCard(
+                    title: 'Delivered',
+                    count: deliveredWaybills.length,
+                    icon: Icons.local_shipping,
+                    color: Colors.green,
+                  ),
+                  _SummaryCard(
+                    title: 'Invoiced',
+                    count: invoicedWaybills.length,
+                    icon: Icons.receipt_long,
+                    color: Colors.blue,
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 28),
+
+              const Text(
+                'Quick Actions',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+
+              const SizedBox(height: 16),
+
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: isWideScreen ? 3 : 1,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                childAspectRatio: isWideScreen ? 2.2 : 3.2,
+                children: [
+                  _DashboardCard(
+                    icon: Icons.receipt_long,
+                    title: 'Ready for Invoice',
+                    subtitle: 'View delivered waybills awaiting invoice',
+                    color: Colors.green,
+                    onTap: () {
+                      openAccountsList(
+                        title: 'Ready for Invoice',
+                        waybills: WaybillService.getDeliveredWaybills(),
+                        showMarkInvoicedButton: true,
+                      );
+                    },
+                  ),
+                  _DashboardCard(
+                    icon: Icons.done_all,
+                    title: 'Invoiced',
+                    subtitle: 'View already invoiced waybills',
+                    color: Colors.blue,
+                    onTap: () {
+                      openAccountsList(
+                        title: 'Invoiced Waybills',
+                        waybills: WaybillService.getInvoicedWaybills(),
+                        showMarkInvoicedButton: false,
+                      );
+                    },
+                  ),
+                  _DashboardCard(
+                    icon: Icons.visibility,
+                    title: 'View Waybill',
+                    subtitle: 'View delivered and invoiced waybills only',
+                    color: Colors.purple,
+                    onTap: () {
+                      final viewableWaybills = [
+                        ...WaybillService.getDeliveredWaybills(),
+                        ...WaybillService.getInvoicedWaybills(),
+                      ];
+
+                      openAccountsList(
+                        title: 'View Waybills',
+                        waybills: viewableWaybills,
+                        showMarkInvoicedButton: false,
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AccountsWaybillListScreen extends StatefulWidget {
+  final String title;
+  final List<WaybillModel> waybills;
+  final bool showMarkInvoicedButton;
+
+  const AccountsWaybillListScreen({
+    super.key,
+    required this.title,
+    required this.waybills,
+    required this.showMarkInvoicedButton,
+  });
+
+  @override
+  State<AccountsWaybillListScreen> createState() =>
+      _AccountsWaybillListScreenState();
+}
+
+class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
+  late List<WaybillModel> allWaybills;
+  late List<WaybillModel> filteredWaybills;
+
+  final searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    allWaybills = widget.waybills;
+    filteredWaybills = allWaybills;
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  void filterWaybills(String query) {
+    final searchText = query.toLowerCase().trim();
+
+    setState(() {
+      if (searchText.isEmpty) {
+        filteredWaybills = allWaybills;
+      } else {
+        filteredWaybills = allWaybills.where((waybill) {
+          return waybill.waybillNumber.toLowerCase().contains(searchText) ||
+              waybill.bajNumber.toLowerCase().contains(searchText) ||
+              waybill.shippingVendor.toLowerCase().contains(searchText) ||
+              waybill.consigneeReceiver.toLowerCase().contains(searchText) ||
+              waybill.status.toLowerCase().contains(searchText);
+        }).toList();
+      }
+    });
   }
 
   Color getStatusColor(String status) {
@@ -59,15 +260,32 @@ class _AccountsDashboardState extends State<AccountsDashboard>
     }
   }
 
+  String _formatDateTime(String value) {
+    if (value.isEmpty) return '-';
+
+    try {
+      final dateTime = DateTime.parse(value);
+      return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} '
+          '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return value;
+    }
+  }
+
   void openWaybillDetails(int index, WaybillModel waybill) async {
+    if (index == -1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not find this waybill record')),
+      );
+      return;
+    }
+
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => WaybillDetailsScreen(waybill: waybill, index: index),
       ),
     );
-
-    loadWaybills();
   }
 
   Future<void> markAsInvoiced(int index, WaybillModel waybill) async {
@@ -89,9 +307,15 @@ class _AccountsDashboardState extends State<AccountsDashboard>
       context,
     ).showSnackBar(const SnackBar(content: Text('Waybill marked as invoiced')));
 
-    loadWaybills();
+    setState(() {
+      allWaybills.removeWhere(
+        (item) => item.waybillNumber == waybill.waybillNumber,
+      );
 
-    _tabController.animateTo(1);
+      filteredWaybills.removeWhere(
+        (item) => item.waybillNumber == waybill.waybillNumber,
+      );
+    });
   }
 
   void confirmMarkAsInvoiced(int index, WaybillModel waybill) {
@@ -122,96 +346,86 @@ class _AccountsDashboardState extends State<AccountsDashboard>
     );
   }
 
-  String _formatDateTime(String value) {
-    if (value.isEmpty) return '-';
-
-    try {
-      final dateTime = DateTime.parse(value);
-      return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} '
-          '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
-    } catch (_) {
-      return value;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    final bool isWideScreen = MediaQuery.of(context).size.width > 850;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Accounts Dashboard'),
-        actions: [
-          IconButton(
-            onPressed: loadWaybills,
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh',
-          ),
-          IconButton(
-            onPressed: () => _logout(context),
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: [
-            Tab(text: 'Ready for Invoice (${deliveredWaybills.length})'),
-            Tab(text: 'Invoiced (${invoicedWaybills.length})'),
+      appBar: AppBar(title: Text(widget.title)),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: TextField(
+                  controller: searchController,
+                  decoration: InputDecoration(
+                    hintText:
+                        'Search waybill, BAJ number, client, receiver or status',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: searchController.text.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              searchController.clear();
+                              filterWaybills('');
+                            },
+                          ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Color(0xFFD0D7DE)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Color(0xFFD0D7DE)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(
+                        color: Colors.blue,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                  onChanged: filterWaybills,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            Expanded(
+              child: filteredWaybills.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No ${widget.title.toLowerCase()} found',
+                        style: const TextStyle(fontSize: 18),
+                      ),
+                    )
+                  : isWideScreen
+                  ? _buildTableView()
+                  : _buildListView(),
+            ),
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildWaybillList(
-            waybills: deliveredWaybills,
-            emptyMessage: 'No waybills ready for invoicing',
-            showMarkInvoicedButton: true,
-          ),
-          _buildWaybillList(
-            waybills: invoicedWaybills,
-            emptyMessage: 'No invoiced waybills yet',
-            showMarkInvoicedButton: false,
-          ),
-        ],
-      ),
     );
   }
 
-  Widget _buildWaybillList({
-    required List<WaybillModel> waybills,
-    required String emptyMessage,
-    required bool showMarkInvoicedButton,
-  }) {
-    final isWideScreen = MediaQuery.of(context).size.width > 850;
-
-    if (waybills.isEmpty) {
-      return Center(
-        child: Text(emptyMessage, style: const TextStyle(fontSize: 18)),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: isWideScreen
-          ? _buildTableView(
-              waybills: waybills,
-              showMarkInvoicedButton: showMarkInvoicedButton,
-            )
-          : _buildListView(
-              waybills: waybills,
-              showMarkInvoicedButton: showMarkInvoicedButton,
-            ),
-    );
-  }
-
-  Widget _buildListView({
-    required List<WaybillModel> waybills,
-    required bool showMarkInvoicedButton,
-  }) {
+  Widget _buildListView() {
     return ListView.builder(
-      itemCount: waybills.length,
+      itemCount: filteredWaybills.length,
       itemBuilder: (context, index) {
-        final waybill = waybills[index];
+        final waybill = filteredWaybills[index];
 
         final originalIndex = WaybillService.getIndexByWaybillNumber(
           waybill.waybillNumber,
@@ -244,7 +458,8 @@ class _AccountsDashboardState extends State<AccountsDashboard>
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                if (showMarkInvoicedButton)
+                if (widget.showMarkInvoicedButton &&
+                    waybill.status == 'Delivered')
                   IconButton(
                     icon: const Icon(Icons.done_all, color: Colors.blue),
                     tooltip: 'Mark Invoiced',
@@ -261,10 +476,7 @@ class _AccountsDashboardState extends State<AccountsDashboard>
     );
   }
 
-  Widget _buildTableView({
-    required List<WaybillModel> waybills,
-    required bool showMarkInvoicedButton,
-  }) {
+  Widget _buildTableView() {
     return SingleChildScrollView(
       child: DataTable(
         headingRowColor: WidgetStateProperty.all(
@@ -279,10 +491,11 @@ class _AccountsDashboardState extends State<AccountsDashboard>
           DataColumn(label: Text('Status')),
           DataColumn(label: Text('Actions')),
         ],
-        rows: waybills.map((waybill) {
+        rows: filteredWaybills.map((waybill) {
           final originalIndex = WaybillService.getIndexByWaybillNumber(
             waybill.waybillNumber,
           );
+
           return DataRow(
             cells: [
               DataCell(Text(waybill.waybillNumber)),
@@ -310,7 +523,8 @@ class _AccountsDashboardState extends State<AccountsDashboard>
                           openWaybillDetails(originalIndex, waybill),
                       child: const Text('View'),
                     ),
-                    if (showMarkInvoicedButton)
+                    if (widget.showMarkInvoicedButton &&
+                        waybill.status == 'Delivered')
                       TextButton.icon(
                         onPressed: () =>
                             confirmMarkAsInvoiced(originalIndex, waybill),
@@ -323,6 +537,143 @@ class _AccountsDashboardState extends State<AccountsDashboard>
             ],
           );
         }).toList(),
+      ),
+    );
+  }
+}
+
+class _SummaryCard extends StatelessWidget {
+  final String title;
+  final int count;
+  final IconData icon;
+  final Color color;
+
+  const _SummaryCard({
+    required this.title,
+    required this.count,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 1.5,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: color.withValues(alpha: 0.08),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: color, size: 30),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    count.toString(),
+                    style: TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    title,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback? onTap;
+
+  const _DashboardCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 1.5,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, size: 30, color: color),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.black54),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

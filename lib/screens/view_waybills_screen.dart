@@ -14,6 +14,11 @@ class ViewWaybillsScreen extends StatefulWidget {
 
 class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
   List<WaybillModel> waybills = [];
+  List<WaybillModel> allWaybills = [];
+  List<WaybillModel> filteredWaybills = [];
+
+  final searchController = TextEditingController();
+
   void editWaybill(int index, WaybillModel waybill) async {
     final result = await Navigator.push(
       context,
@@ -24,8 +29,10 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
 
     if (result == true) {
       setState(() {
-        waybills = WaybillService.getAllWaybills();
+        allWaybills = WaybillService.getAllWaybills();
       });
+
+      filterWaybills(searchController.text);
     }
   }
 
@@ -42,10 +49,40 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
     });
   }
 
+  void loadWaybills() {
+    allWaybills = WaybillService.getAllWaybills();
+    filteredWaybills = allWaybills;
+  }
+
+  void filterWaybills(String query) {
+    final searchText = query.toLowerCase().trim();
+
+    setState(() {
+      if (searchText.isEmpty) {
+        filteredWaybills = allWaybills;
+      } else {
+        filteredWaybills = allWaybills.where((waybill) {
+          return waybill.waybillNumber.toLowerCase().contains(searchText) ||
+              waybill.bajNumber.toLowerCase().contains(searchText) ||
+              waybill.shippingVendor.toLowerCase().contains(searchText) ||
+              waybill.consigneeReceiver.toLowerCase().contains(searchText) ||
+              waybill.status.toLowerCase().contains(searchText);
+        }).toList();
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     waybills = WaybillService.getAllWaybills();
+    loadWaybills();
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
   }
 
   Color getStatusColor(String status) {
@@ -67,25 +104,80 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('View Waybills')),
-      body: waybills.isEmpty
-          ? const Center(
-              child: Text(
-                'No waybills created yet',
-                style: TextStyle(fontSize: 18),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: TextField(
+                  controller: searchController,
+                  decoration: InputDecoration(
+                    hintText:
+                        'Search waybill, BAJ number, client, receiver or status',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: searchController.text.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              searchController.clear();
+                              filterWaybills('');
+                            },
+                          ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Color(0xFFD0D7DE)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Color(0xFFD0D7DE)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(
+                        color: Colors.blue,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                  onChanged: filterWaybills,
+                ),
               ),
-            )
-          : Padding(
-              padding: const EdgeInsets.all(16),
-              child: isWideScreen ? _buildTableView() : _buildListView(),
             ),
+
+            const SizedBox(height: 16),
+
+            Expanded(
+              child: filteredWaybills.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No waybills found',
+                        style: TextStyle(fontSize: 18),
+                      ),
+                    )
+                  : isWideScreen
+                  ? _buildTableView()
+                  : _buildListView(),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildListView() {
     return ListView.builder(
-      itemCount: waybills.length,
+      itemCount: filteredWaybills.length,
       itemBuilder: (context, index) {
-        final waybill = waybills[index];
+        final waybill = filteredWaybills[index];
 
         return Card(
           child: ListTile(
@@ -136,7 +228,7 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
           DataColumn(label: Text('Status')),
           DataColumn(label: Text('Action')),
         ],
-        rows: waybills.map((waybill) {
+        rows: filteredWaybills.map((waybill) {
           return DataRow(
             cells: [
               DataCell(Text(waybill.waybillNumber)),
@@ -160,7 +252,9 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
                   children: [
                     TextButton(
                       onPressed: () {
-                        final index = waybills.indexOf(waybill);
+                        final index = WaybillService.getIndexByWaybillNumber(
+                          waybill.waybillNumber,
+                        );
                         openWaybillDetails(index, waybill);
                       },
                       child: const Text('View'),
