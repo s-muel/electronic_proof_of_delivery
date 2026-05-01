@@ -6,6 +6,8 @@ import '../widgets/waybill_template_widget.dart';
 import 'dart:typed_data';
 import 'signature_capture_screen.dart';
 
+import '../services/cloudinary_service.dart';
+
 class DriverDeliveryScreen extends StatefulWidget {
   final WaybillModel waybill;
   final int index;
@@ -151,16 +153,55 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
         return;
       }
 
-      if (!receiverSignatureCaptured) {
+      if (!receiverSignatureCaptured || receiverSignatureBytes == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please capture receiver signature')),
         );
         return;
       }
 
-      if (!driverSignatureCaptured) {
+      if (!driverSignatureCaptured || driverSignatureBytes == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please capture driver signature')),
+        );
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Uploading signatures, please wait...')),
+      );
+
+      final safeWaybillNumber = currentWaybill.waybillNumber.replaceAll(
+        RegExp(r'[^a-zA-Z0-9_-]'),
+        '_',
+      );
+
+      final receiverSignatureUrl = await CloudinaryService.uploadSignature(
+        signatureBytes: receiverSignatureBytes!,
+        fileName: 'receiver_signature_$safeWaybillNumber',
+      );
+
+      if (receiverSignatureUrl == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Receiver signature upload failed. Please try again.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final driverSignatureUrl = await CloudinaryService.uploadSignature(
+        signatureBytes: driverSignatureBytes!,
+        fileName: 'driver_signature_$safeWaybillNumber',
+      );
+
+      if (driverSignatureUrl == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Driver signature upload failed. Please try again.'),
+          ),
         );
         return;
       }
@@ -175,8 +216,8 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
         isParkingUnsuitable: isParkingUnsuitable,
         isPartOrder: isPartOrder,
         isCompleteOrder: isCompleteOrder,
-        signatureUrl: 'receiver-signature-captured-placeholder',
-        driverSignatureUrl: 'driver-signature-captured-placeholder',
+        signatureUrl: receiverSignatureUrl,
+        driverSignatureUrl: driverSignatureUrl,
         receiverSignatureBytes: receiverSignatureBytes,
         driverSignatureBytes: driverSignatureBytes,
         status: 'Delivered',
@@ -184,6 +225,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
       );
 
       await WaybillService.updateWaybill(widget.index, updatedWaybill);
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Delivery submitted successfully')),
       );

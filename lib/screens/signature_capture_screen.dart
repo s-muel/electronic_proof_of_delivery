@@ -16,6 +16,9 @@ class SignatureCaptureScreen extends StatefulWidget {
 }
 
 class _SignatureCaptureScreenState extends State<SignatureCaptureScreen> {
+  static const int _exportWidth = 500;
+  static const int _exportHeight = 180;
+
   late final SignatureController _signatureController;
 
   @override
@@ -45,8 +48,10 @@ class _SignatureCaptureScreenState extends State<SignatureCaptureScreen> {
       return;
     }
 
-    final Uint8List? signatureBytes =
-        await _signatureController.toPngBytes();
+    final Uint8List? signatureBytes = await _signatureController.toPngBytes(
+      width: _exportWidth,
+      height: _exportHeight,
+    );
 
     if (signatureBytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(

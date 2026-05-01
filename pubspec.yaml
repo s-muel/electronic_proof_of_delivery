@@ -37,6 +37,7 @@ dependencies:
   printing: ^5.14.3
   signature: ^6.3.0
   hive_flutter: ^1.1.0
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
