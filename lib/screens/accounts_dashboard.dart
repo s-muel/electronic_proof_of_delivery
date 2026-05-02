@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/waybill_model.dart';
+import '../services/delivery_sync_service.dart';
 import '../services/waybill_service.dart';
 import '../widgets/network_status_bar.dart';
 import 'login_screen.dart';
@@ -16,6 +17,7 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
   List<WaybillModel> pendingWaybills = [];
   List<WaybillModel> deliveredWaybills = [];
   List<WaybillModel> invoicedWaybills = [];
+  bool isSyncing = false;
 
   @override
   void initState() {
@@ -29,6 +31,29 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
       deliveredWaybills = WaybillService.getDeliveredWaybills();
       invoicedWaybills = WaybillService.getInvoicedWaybills();
     });
+  }
+
+  Future<void> syncNow() async {
+    if (isSyncing) return;
+
+    setState(() => isSyncing = true);
+
+    final syncedCount = await DeliverySyncService.syncPendingDeliveries();
+
+    if (!mounted) return;
+
+    setState(() => isSyncing = false);
+    loadWaybills();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          syncedCount > 0
+              ? '$syncedCount offline delivery sync completed'
+              : 'No offline deliveries were synced',
+        ),
+      ),
+    );
   }
 
   void _logout(BuildContext context) {
@@ -87,7 +112,10 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const NetworkStatusBar(),
+              NetworkStatusBar(
+                onSyncNow: syncNow,
+                isSyncing: isSyncing,
+              ),
 
               const SizedBox(height: 20),
 
@@ -104,7 +132,7 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
                 crossAxisCount: isWideScreen ? 3 : 1,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
-                childAspectRatio: isWideScreen ? 2.6 : 3.2,
+                childAspectRatio: isWideScreen ? 3.2 : 3.8,
                 children: [
                   _SummaryCard(
                     title: 'Pending Delivery',
@@ -568,7 +596,7 @@ class _SummaryCard extends StatelessWidget {
       elevation: 1.5,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Container(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
           color: color.withValues(alpha: 0.08),
@@ -577,15 +605,15 @@ class _SummaryCard extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 54,
-              height: 54,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: color, size: 30),
+              child: Icon(icon, color: color, size: 22),
             ),
-            const SizedBox(width: 18),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -594,19 +622,21 @@ class _SummaryCard extends StatelessWidget {
                   Text(
                     count.toString(),
                     style: TextStyle(
-                      fontSize: 30,
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: color,
+                      height: 1,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
                     title,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 15,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: Colors.black87,
+                      height: 1,
                     ),
                   ),
                 ],

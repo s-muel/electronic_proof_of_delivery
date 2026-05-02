@@ -139,7 +139,10 @@ class _DriverDashboardState extends State<DriverDashboard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const NetworkStatusBar(),
+                  NetworkStatusBar(
+                    onSyncNow: refreshDashboard,
+                    isSyncing: isSyncing,
+                  ),
                   const SizedBox(height: 12),
                   if (pendingSyncWaybills.isNotEmpty) _buildPendingSyncBanner(),
                   Expanded(

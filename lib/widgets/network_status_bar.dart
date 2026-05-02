@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 class NetworkStatusBar extends StatefulWidget {
-  const NetworkStatusBar({super.key});
+  final VoidCallback? onSyncNow;
+  final bool isSyncing;
+
+  const NetworkStatusBar({super.key, this.onSyncNow, this.isSyncing = false});
 
   @override
   State<NetworkStatusBar> createState() => _NetworkStatusBarState();
@@ -65,8 +68,62 @@ class _NetworkStatusBarState extends State<NetworkStatusBar> {
     final icon = isConnected ? Icons.cloud_done : Icons.cloud_off;
     final title = isConnected ? 'Internet connected' : 'No internet connection';
     final subtitle = isConnected
-        ? 'Online sync and Cloudinary uploads are available.'
+        ? 'Online sync and uploads are available.'
         : 'Deliveries will be saved offline and synced when internet returns.';
+    final isCompact = MediaQuery.of(context).size.width < 520;
+    final statusIcon = _isChecking && isOnline == null
+        ? const SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        : Icon(icon, color: color, size: 26);
+    final statusText = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _isChecking && isOnline == null
+              ? 'Checking internet connection...'
+              : title,
+          style: TextStyle(
+            color: color,
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          _isChecking && isOnline == null
+              ? 'Please wait while the app checks network access.'
+              : subtitle,
+          style: const TextStyle(color: Colors.black87, fontSize: 12),
+        ),
+      ],
+    );
+    final actions = Wrap(
+      spacing: 6,
+      runSpacing: 4,
+      alignment: WrapAlignment.end,
+      children: [
+        if (widget.onSyncNow != null)
+          TextButton.icon(
+            onPressed: widget.isSyncing ? null : widget.onSyncNow,
+            icon: widget.isSyncing
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.sync, size: 18),
+            label: Text(widget.isSyncing ? 'Syncing' : 'Sync Now'),
+          ),
+        TextButton.icon(
+          onPressed: _isChecking ? null : _checkConnection,
+          icon: const Icon(Icons.refresh, size: 18),
+          label: const Text('Check'),
+        ),
+      ],
+    );
 
     return Card(
       elevation: 0,
@@ -77,51 +134,30 @@ class _NetworkStatusBarState extends State<NetworkStatusBar> {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            if (_isChecking && isOnline == null)
-              const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            else
-              Icon(icon, color: color, size: 26),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
+        child: isCompact
+            ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    _isChecking && isOnline == null
-                        ? 'Checking internet connection...'
-                        : title,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      statusIcon,
+                      const SizedBox(width: 12),
+                      Expanded(child: statusText),
+                    ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    _isChecking && isOnline == null
-                        ? 'Please wait while the app checks network access.'
-                        : subtitle,
-                    style: const TextStyle(
-                      color: Colors.black87,
-                      fontSize: 12,
-                    ),
-                  ),
+                  const SizedBox(height: 8),
+                  Align(alignment: Alignment.centerRight, child: actions),
+                ],
+              )
+            : Row(
+                children: [
+                  statusIcon,
+                  const SizedBox(width: 12),
+                  Expanded(child: statusText),
+                  actions,
                 ],
               ),
-            ),
-            TextButton.icon(
-              onPressed: _isChecking ? null : _checkConnection,
-              icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('Check'),
-            ),
-          ],
-        ),
       ),
     );
   }
