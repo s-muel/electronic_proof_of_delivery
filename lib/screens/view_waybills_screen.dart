@@ -89,6 +89,8 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
     switch (status) {
       case 'Pending Delivery':
         return Colors.orange;
+      case 'Pending Sync':
+        return Colors.deepOrange;
       case 'Delivered':
         return Colors.green;
       case 'Invoiced':

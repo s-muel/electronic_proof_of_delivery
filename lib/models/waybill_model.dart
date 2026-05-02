@@ -1,11 +1,6 @@
 import 'dart:typed_data';
 
-
-
 class WaybillModel {
-final Uint8List? receiverSignatureBytes;
-final Uint8List? driverSignatureBytes;
-
   final String bajNumber;
   final String waybillNumber;
   final String date;
@@ -32,17 +27,17 @@ final Uint8List? driverSignatureBytes;
 
   final String status;
   final String receiverName;
-  final String signatureUrl; // Receiver signature
-  final String driverSignatureUrl;
+  final String signatureUrl; // Receiver signature Cloudinary URL
+  final String driverSignatureUrl; // Driver signature Cloudinary URL
+
+  final Uint8List? receiverSignatureBytes; // Local receiver signature image
+  final Uint8List? driverSignatureBytes; // Local driver signature image
+
   final String createdAt;
   final String deliveredAt;
   final String invoicedAt;
 
   WaybillModel({
-
-this.receiverSignatureBytes,
-this.driverSignatureBytes,
-
     required this.bajNumber,
     required this.waybillNumber,
     required this.date,
@@ -69,6 +64,8 @@ this.driverSignatureBytes,
     this.receiverName = '',
     this.signatureUrl = '',
     this.driverSignatureUrl = '',
+    this.receiverSignatureBytes,
+    this.driverSignatureBytes,
     required this.createdAt,
     this.deliveredAt = '',
     this.invoicedAt = '',
@@ -76,9 +73,6 @@ this.driverSignatureBytes,
 
   Map<String, dynamic> toMap() {
     return {
-'receiverSignatureBytes': receiverSignatureBytes,
-'driverSignatureBytes': driverSignatureBytes,
-
       'bajNumber': bajNumber,
       'waybillNumber': waybillNumber,
       'date': date,
@@ -105,6 +99,8 @@ this.driverSignatureBytes,
       'receiverName': receiverName,
       'signatureUrl': signatureUrl,
       'driverSignatureUrl': driverSignatureUrl,
+      'receiverSignatureBytes': receiverSignatureBytes,
+      'driverSignatureBytes': driverSignatureBytes,
       'createdAt': createdAt,
       'deliveredAt': deliveredAt,
       'invoicedAt': invoicedAt,
@@ -138,9 +134,11 @@ this.driverSignatureBytes,
       status: map['status'] ?? 'Pending Delivery',
       receiverName: map['receiverName'] ?? '',
       signatureUrl: map['signatureUrl'] ?? '',
-      receiverSignatureBytes: map['receiverSignatureBytes'],
-driverSignatureBytes: map['driverSignatureBytes'],
       driverSignatureUrl: map['driverSignatureUrl'] ?? '',
+      receiverSignatureBytes: _convertToUint8List(
+        map['receiverSignatureBytes'],
+      ),
+      driverSignatureBytes: _convertToUint8List(map['driverSignatureBytes']),
       createdAt: map['createdAt'] ?? '',
       deliveredAt: map['deliveredAt'] ?? '',
       invoicedAt: map['invoicedAt'] ?? '',
@@ -148,9 +146,6 @@ driverSignatureBytes: map['driverSignatureBytes'],
   }
 
   WaybillModel copyWith({
-Uint8List? receiverSignatureBytes,
-Uint8List? driverSignatureBytes,
-
     String? bajNumber,
     String? waybillNumber,
     String? date,
@@ -177,14 +172,13 @@ Uint8List? driverSignatureBytes,
     String? receiverName,
     String? signatureUrl,
     String? driverSignatureUrl,
+    Uint8List? receiverSignatureBytes,
+    Uint8List? driverSignatureBytes,
     String? createdAt,
     String? deliveredAt,
     String? invoicedAt,
   }) {
     return WaybillModel(
-receiverSignatureBytes: receiverSignatureBytes ?? this.receiverSignatureBytes,
-driverSignatureBytes: driverSignatureBytes ?? this.driverSignatureBytes,
-
       bajNumber: bajNumber ?? this.bajNumber,
       waybillNumber: waybillNumber ?? this.waybillNumber,
       date: date ?? this.date,
@@ -204,17 +198,37 @@ driverSignatureBytes: driverSignatureBytes ?? this.driverSignatureBytes,
       isShort: isShort ?? this.isShort,
       isOver: isOver ?? this.isOver,
       isDamaged: isDamaged ?? this.isDamaged,
-      isParkingUnsuitable:
-          isParkingUnsuitable ?? this.isParkingUnsuitable,
+      isParkingUnsuitable: isParkingUnsuitable ?? this.isParkingUnsuitable,
       isPartOrder: isPartOrder ?? this.isPartOrder,
       isCompleteOrder: isCompleteOrder ?? this.isCompleteOrder,
       status: status ?? this.status,
       receiverName: receiverName ?? this.receiverName,
       signatureUrl: signatureUrl ?? this.signatureUrl,
       driverSignatureUrl: driverSignatureUrl ?? this.driverSignatureUrl,
+      receiverSignatureBytes:
+          receiverSignatureBytes ?? this.receiverSignatureBytes,
+      driverSignatureBytes: driverSignatureBytes ?? this.driverSignatureBytes,
       createdAt: createdAt ?? this.createdAt,
       deliveredAt: deliveredAt ?? this.deliveredAt,
       invoicedAt: invoicedAt ?? this.invoicedAt,
     );
+  }
+
+  static Uint8List? _convertToUint8List(dynamic value) {
+    if (value == null) return null;
+
+    if (value is Uint8List) {
+      return value;
+    }
+
+    if (value is List<int>) {
+      return Uint8List.fromList(value);
+    }
+
+    if (value is List<dynamic>) {
+      return Uint8List.fromList(value.cast<int>());
+    }
+
+    return null;
   }
 }

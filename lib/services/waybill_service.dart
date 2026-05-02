@@ -3,6 +3,11 @@ import '../models/waybill_model.dart';
 
 class WaybillService {
   static const String _boxName = 'waybillsBox';
+  static const String pendingDeliveryStatus = 'Pending Delivery';
+  static const String pendingSyncStatus = 'Pending Sync';
+  static const String deliveredStatus = 'Delivered';
+  static const String invoicedStatus = 'Invoiced';
+
   static late Box _box;
 
   static Future<void> init() async {
@@ -39,19 +44,25 @@ class WaybillService {
 
   static List<WaybillModel> getPendingWaybills() {
     return getAllWaybills()
-        .where((waybill) => waybill.status == 'Pending Delivery')
+        .where((waybill) => waybill.status == pendingDeliveryStatus)
+        .toList();
+  }
+
+  static List<WaybillModel> getPendingSyncWaybills() {
+    return getAllWaybills()
+        .where((waybill) => waybill.status == pendingSyncStatus)
         .toList();
   }
 
   static List<WaybillModel> getDeliveredWaybills() {
     return getAllWaybills()
-        .where((waybill) => waybill.status == 'Delivered')
+        .where((waybill) => waybill.status == deliveredStatus)
         .toList();
   }
 
   static List<WaybillModel> getInvoicedWaybills() {
     return getAllWaybills()
-        .where((waybill) => waybill.status == 'Invoiced')
+        .where((waybill) => waybill.status == invoicedStatus)
         .toList();
   }
 

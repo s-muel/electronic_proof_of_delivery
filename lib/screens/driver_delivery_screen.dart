@@ -168,7 +168,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Uploading signatures, please wait...')),
+        const SnackBar(content: Text('Saving delivery, please wait...')),
       );
 
       final safeWaybillNumber = currentWaybill.waybillNumber.replaceAll(
@@ -181,30 +181,15 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
         fileName: 'receiver_signature_$safeWaybillNumber',
       );
 
-      if (receiverSignatureUrl == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Receiver signature upload failed. Please try again.',
-            ),
-          ),
-        );
-        return;
-      }
+      final driverSignatureUrl = receiverSignatureUrl == null
+          ? null
+          : await CloudinaryService.uploadSignature(
+              signatureBytes: driverSignatureBytes!,
+              fileName: 'driver_signature_$safeWaybillNumber',
+            );
 
-      final driverSignatureUrl = await CloudinaryService.uploadSignature(
-        signatureBytes: driverSignatureBytes!,
-        fileName: 'driver_signature_$safeWaybillNumber',
-      );
-
-      if (driverSignatureUrl == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Driver signature upload failed. Please try again.'),
-          ),
-        );
-        return;
-      }
+      final bool uploadedOnline =
+          receiverSignatureUrl != null && driverSignatureUrl != null;
 
       final updatedWaybill = currentWaybill.copyWith(
         receiverName: receiverNameController.text.trim(),
@@ -216,18 +201,26 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
         isParkingUnsuitable: isParkingUnsuitable,
         isPartOrder: isPartOrder,
         isCompleteOrder: isCompleteOrder,
-        signatureUrl: receiverSignatureUrl,
-        driverSignatureUrl: driverSignatureUrl,
+        signatureUrl: receiverSignatureUrl ?? '',
+        driverSignatureUrl: driverSignatureUrl ?? '',
         receiverSignatureBytes: receiverSignatureBytes,
         driverSignatureBytes: driverSignatureBytes,
-        status: 'Delivered',
+        status: uploadedOnline
+            ? WaybillService.deliveredStatus
+            : WaybillService.pendingSyncStatus,
         deliveredAt: DateTime.now().toIso8601String(),
       );
 
       await WaybillService.updateWaybill(widget.index, updatedWaybill);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Delivery submitted successfully')),
+        SnackBar(
+          content: Text(
+            uploadedOnline
+                ? 'Delivery submitted successfully'
+                : 'Delivery saved offline. It will sync when internet is available.',
+          ),
+        ),
       );
 
       Navigator.pop(context, true);

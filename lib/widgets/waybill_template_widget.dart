@@ -349,6 +349,7 @@ class WaybillTemplateWidget extends StatelessWidget {
                 ? ''
                 : 'Driver Signature Captured',
             signatureBytes: driverSignatureBytes,
+            signatureUrl: waybill.driverSignatureUrl,
           ),
         ),
         Expanded(
@@ -364,6 +365,7 @@ class WaybillTemplateWidget extends StatelessWidget {
                 ? ''
                 : 'Receiver Signature Captured',
             signatureBytes: receiverSignatureBytes,
+            signatureUrl: waybill.signatureUrl,
           ),
         ),
       ],
@@ -402,7 +404,11 @@ class WaybillTemplateWidget extends StatelessWidget {
     required String label,
     required String value,
     Uint8List? signatureBytes,
+    String? signatureUrl,
   }) {
+    final hasSignatureUrl =
+        signatureUrl != null && signatureUrl.trim().isNotEmpty;
+
     return Container(
       height: 110,
       padding: const EdgeInsets.all(8),
@@ -427,12 +433,32 @@ class WaybillTemplateWidget extends StatelessWidget {
                     height: double.infinity,
                     alignment: Alignment.centerLeft,
                   )
+                : hasSignatureUrl
+                ? Image.network(
+                    signatureUrl,
+                    fit: BoxFit.contain,
+                    width: double.infinity,
+                    height: double.infinity,
+                    alignment: Alignment.centerLeft,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Align(
+                        alignment: Alignment.bottomLeft,
+                        child: Text(
+                          value,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      );
+                    },
+                  )
                 : Align(
                     alignment: Alignment.bottomLeft,
                     child: Text(
                       value,
                       style: const TextStyle(
-                        fontSize: 14,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
                     ),

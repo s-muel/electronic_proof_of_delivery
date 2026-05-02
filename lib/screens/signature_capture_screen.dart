@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:signature/signature.dart';
@@ -16,8 +17,7 @@ class SignatureCaptureScreen extends StatefulWidget {
 }
 
 class _SignatureCaptureScreenState extends State<SignatureCaptureScreen> {
-  static const int _exportWidth = 500;
-  static const int _exportHeight = 180;
+  static const int _maxExportWidth = 500;
 
   late final SignatureController _signatureController;
 
@@ -48,10 +48,7 @@ class _SignatureCaptureScreenState extends State<SignatureCaptureScreen> {
       return;
     }
 
-    final Uint8List? signatureBytes = await _signatureController.toPngBytes(
-      width: _exportWidth,
-      height: _exportHeight,
-    );
+    final Uint8List? signatureBytes = await _signatureController.toPngBytes();
 
     if (signatureBytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -62,7 +59,39 @@ class _SignatureCaptureScreenState extends State<SignatureCaptureScreen> {
       return;
     }
 
-    Navigator.pop(context, signatureBytes);
+    final compressedSignatureBytes = await _resizePngBytes(
+      signatureBytes,
+      maxWidth: _maxExportWidth,
+    );
+
+    Navigator.pop(context, compressedSignatureBytes);
+  }
+
+  Future<Uint8List> _resizePngBytes(
+    Uint8List imageBytes, {
+    required int maxWidth,
+  }) async {
+    final codec = await ui.instantiateImageCodec(imageBytes);
+    final frame = await codec.getNextFrame();
+    final image = frame.image;
+
+    if (image.width <= maxWidth) {
+      return imageBytes;
+    }
+
+    final targetHeight = (image.height * maxWidth / image.width).round();
+    final resizedCodec = await ui.instantiateImageCodec(
+      imageBytes,
+      targetWidth: maxWidth,
+      targetHeight: targetHeight,
+    );
+    final resizedFrame = await resizedCodec.getNextFrame();
+    final resizedImage = resizedFrame.image;
+    final byteData = await resizedImage.toByteData(
+      format: ui.ImageByteFormat.png,
+    );
+
+    return byteData?.buffer.asUint8List() ?? imageBytes;
   }
 
   void clearSignature() {

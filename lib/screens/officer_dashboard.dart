@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/waybill_service.dart';
+import '../widgets/network_status_bar.dart';
 import 'login_screen.dart';
 import 'create_waybill_screen.dart';
 import 'view_waybills_screen.dart';
@@ -85,6 +86,10 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const NetworkStatusBar(),
+
+              const SizedBox(height: 20),
+
               const Text(
                 'Waybill Summary',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),

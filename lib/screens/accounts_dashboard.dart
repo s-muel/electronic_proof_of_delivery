@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/waybill_model.dart';
 import '../services/waybill_service.dart';
+import '../widgets/network_status_bar.dart';
 import 'login_screen.dart';
 import 'waybill_details_screen.dart';
 
@@ -86,6 +87,10 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const NetworkStatusBar(),
+
+              const SizedBox(height: 20),
+
               const Text(
                 'Waybill Summary',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
@@ -251,6 +256,8 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
     switch (status) {
       case 'Pending Delivery':
         return Colors.orange;
+      case 'Pending Sync':
+        return Colors.deepOrange;
       case 'Delivered':
         return Colors.green;
       case 'Invoiced':
