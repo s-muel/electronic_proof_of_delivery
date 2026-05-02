@@ -98,7 +98,7 @@ Future<void> updateWaybill() async {
         // Keep existing system fields
         status: widget.waybill.status,
         receiverName: widget.waybill.receiverName,
-        signatureUrl: widget.waybill.signatureUrl,
+        receiverSignatureUrl: widget.waybill.receiverSignatureUrl,
         createdAt: widget.waybill.createdAt,
         deliveredAt: widget.waybill.deliveredAt,
         invoicedAt: widget.waybill.invoicedAt,

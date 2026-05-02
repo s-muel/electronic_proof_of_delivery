@@ -409,7 +409,7 @@ class PdfService {
         pw.Expanded(
           child: _signatureBox(
             label: 'RECEIVER SIGNATURE',
-            value: waybill.signatureUrl.isEmpty
+            value: waybill.receiverSignatureUrl.isEmpty
                 ? ''
                 : 'Receiver Signature Captured',
             signatureImage: receiverSignatureImage,

@@ -60,7 +60,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
     isPartOrder = widget.waybill.isPartOrder;
     isCompleteOrder = widget.waybill.isCompleteOrder;
 
-    receiverSignatureCaptured = widget.waybill.signatureUrl.isNotEmpty;
+    receiverSignatureCaptured = widget.waybill.receiverSignatureUrl.isNotEmpty;
     driverSignatureCaptured = widget.waybill.driverSignatureUrl.isNotEmpty;
   }
 
@@ -133,7 +133,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
       isParkingUnsuitable: isParkingUnsuitable,
       isPartOrder: isPartOrder,
       isCompleteOrder: isCompleteOrder,
-      signatureUrl: receiverSignatureCaptured
+      receiverSignatureUrl: receiverSignatureCaptured
           ? 'receiver-signature-captured-placeholder'
           : '',
       driverSignatureUrl: driverSignatureCaptured
@@ -190,6 +190,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
 
       final bool uploadedOnline =
           receiverSignatureUrl != null && driverSignatureUrl != null;
+      final now = DateTime.now().toIso8601String();
 
       final updatedWaybill = currentWaybill.copyWith(
         receiverName: receiverNameController.text.trim(),
@@ -201,14 +202,16 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
         isParkingUnsuitable: isParkingUnsuitable,
         isPartOrder: isPartOrder,
         isCompleteOrder: isCompleteOrder,
-        signatureUrl: receiverSignatureUrl ?? '',
+        receiverSignatureUrl: receiverSignatureUrl ?? '',
         driverSignatureUrl: driverSignatureUrl ?? '',
         receiverSignatureBytes: receiverSignatureBytes,
         driverSignatureBytes: driverSignatureBytes,
         status: uploadedOnline
             ? WaybillService.deliveredStatus
             : WaybillService.pendingSyncStatus,
-        deliveredAt: DateTime.now().toIso8601String(),
+        syncStatus: uploadedOnline ? 'Synced' : 'Pending',
+        deliveredAt: now,
+        updatedAt: now,
       );
 
       await WaybillService.updateWaybill(widget.index, updatedWaybill);

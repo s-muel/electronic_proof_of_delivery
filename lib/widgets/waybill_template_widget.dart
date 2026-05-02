@@ -349,7 +349,7 @@ class WaybillTemplateWidget extends StatelessWidget {
                 ? ''
                 : 'Driver Signature Captured',
             signatureBytes: driverSignatureBytes,
-            signatureUrl: waybill.driverSignatureUrl,
+            imageUrl: waybill.driverSignatureUrl,
           ),
         ),
         Expanded(
@@ -361,11 +361,11 @@ class WaybillTemplateWidget extends StatelessWidget {
         Expanded(
           child: _signatureBox(
             label: 'RECEIVER SIGNATURE',
-            value: waybill.signatureUrl.isEmpty
+            value: waybill.receiverSignatureUrl.isEmpty
                 ? ''
                 : 'Receiver Signature Captured',
             signatureBytes: receiverSignatureBytes,
-            signatureUrl: waybill.signatureUrl,
+            imageUrl: waybill.receiverSignatureUrl,
           ),
         ),
       ],
@@ -404,10 +404,9 @@ class WaybillTemplateWidget extends StatelessWidget {
     required String label,
     required String value,
     Uint8List? signatureBytes,
-    String? signatureUrl,
+    String? imageUrl,
   }) {
-    final hasSignatureUrl =
-        signatureUrl != null && signatureUrl.trim().isNotEmpty;
+    final hasImageUrl = imageUrl != null && imageUrl.trim().isNotEmpty;
 
     return Container(
       height: 110,
@@ -433,9 +432,9 @@ class WaybillTemplateWidget extends StatelessWidget {
                     height: double.infinity,
                     alignment: Alignment.centerLeft,
                   )
-                : hasSignatureUrl
+                : hasImageUrl
                 ? Image.network(
-                    signatureUrl,
+                    imageUrl!,
                     fit: BoxFit.contain,
                     width: double.infinity,
                     height: double.infinity,

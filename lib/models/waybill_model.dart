@@ -26,14 +26,16 @@ class WaybillModel {
   final bool isCompleteOrder;
 
   final String status;
+  final String syncStatus;
   final String receiverName;
-  final String signatureUrl; // Receiver signature Cloudinary URL
-  final String driverSignatureUrl; // Driver signature Cloudinary URL
+  final String receiverSignatureUrl; // Receiver signature image URL
+  final String driverSignatureUrl; // Driver signature image URL
 
   final Uint8List? receiverSignatureBytes; // Local receiver signature image
   final Uint8List? driverSignatureBytes; // Local driver signature image
 
   final String createdAt;
+  final String updatedAt;
   final String deliveredAt;
   final String invoicedAt;
 
@@ -61,15 +63,17 @@ class WaybillModel {
     this.isPartOrder = false,
     this.isCompleteOrder = false,
     this.status = 'Pending Delivery',
+    this.syncStatus = 'Synced',
     this.receiverName = '',
-    this.signatureUrl = '',
+    this.receiverSignatureUrl = '',
     this.driverSignatureUrl = '',
     this.receiverSignatureBytes,
     this.driverSignatureBytes,
     required this.createdAt,
+    String? updatedAt,
     this.deliveredAt = '',
     this.invoicedAt = '',
-  });
+  }) : updatedAt = updatedAt ?? createdAt;
 
   Map<String, dynamic> toMap() {
     return {
@@ -96,12 +100,50 @@ class WaybillModel {
       'isPartOrder': isPartOrder,
       'isCompleteOrder': isCompleteOrder,
       'status': status,
+      'syncStatus': syncStatus,
       'receiverName': receiverName,
-      'signatureUrl': signatureUrl,
+      'receiverSignatureUrl': receiverSignatureUrl,
       'driverSignatureUrl': driverSignatureUrl,
       'receiverSignatureBytes': receiverSignatureBytes,
       'driverSignatureBytes': driverSignatureBytes,
       'createdAt': createdAt,
+      'updatedAt': updatedAt,
+      'deliveredAt': deliveredAt,
+      'invoicedAt': invoicedAt,
+    };
+  }
+
+  Map<String, dynamic> toFirestoreMap() {
+    return {
+      'bajNumber': bajNumber,
+      'waybillNumber': waybillNumber,
+      'date': date,
+      'poNumber': poNumber,
+      'shippingVendor': shippingVendor,
+      'consigneeReceiver': consigneeReceiver,
+      'deliveryAddress': deliveryAddress,
+      'cargoDescription': cargoDescription,
+      'grossWeight': grossWeight,
+      'comments': comments,
+      'hazardousCargoType': hazardousCargoType,
+      'unNumber': unNumber,
+      'tremcard': tremcard,
+      'vehicleNumber': vehicleNumber,
+      'driverName': driverName,
+      'receiverName': receiverName,
+      'status': status,
+      'syncStatus': syncStatus,
+      'isOk': isOk,
+      'isShort': isShort,
+      'isOver': isOver,
+      'isDamaged': isDamaged,
+      'isParkingUnsuitable': isParkingUnsuitable,
+      'isPartOrder': isPartOrder,
+      'isCompleteOrder': isCompleteOrder,
+      'receiverSignatureUrl': receiverSignatureUrl,
+      'driverSignatureUrl': driverSignatureUrl,
+      'createdAt': createdAt,
+      'updatedAt': updatedAt,
       'deliveredAt': deliveredAt,
       'invoicedAt': invoicedAt,
     };
@@ -132,14 +174,17 @@ class WaybillModel {
       isPartOrder: map['isPartOrder'] ?? false,
       isCompleteOrder: map['isCompleteOrder'] ?? false,
       status: map['status'] ?? 'Pending Delivery',
+      syncStatus: map['syncStatus'] ?? 'Synced',
       receiverName: map['receiverName'] ?? '',
-      signatureUrl: map['signatureUrl'] ?? '',
+      receiverSignatureUrl:
+          map['receiverSignatureUrl'] ?? map['signatureUrl'] ?? '',
       driverSignatureUrl: map['driverSignatureUrl'] ?? '',
       receiverSignatureBytes: _convertToUint8List(
         map['receiverSignatureBytes'],
       ),
       driverSignatureBytes: _convertToUint8List(map['driverSignatureBytes']),
       createdAt: map['createdAt'] ?? '',
+      updatedAt: map['updatedAt'],
       deliveredAt: map['deliveredAt'] ?? '',
       invoicedAt: map['invoicedAt'] ?? '',
     );
@@ -169,12 +214,14 @@ class WaybillModel {
     bool? isPartOrder,
     bool? isCompleteOrder,
     String? status,
+    String? syncStatus,
     String? receiverName,
-    String? signatureUrl,
+    String? receiverSignatureUrl,
     String? driverSignatureUrl,
     Uint8List? receiverSignatureBytes,
     Uint8List? driverSignatureBytes,
     String? createdAt,
+    String? updatedAt,
     String? deliveredAt,
     String? invoicedAt,
   }) {
@@ -202,13 +249,15 @@ class WaybillModel {
       isPartOrder: isPartOrder ?? this.isPartOrder,
       isCompleteOrder: isCompleteOrder ?? this.isCompleteOrder,
       status: status ?? this.status,
+      syncStatus: syncStatus ?? this.syncStatus,
       receiverName: receiverName ?? this.receiverName,
-      signatureUrl: signatureUrl ?? this.signatureUrl,
+      receiverSignatureUrl: receiverSignatureUrl ?? this.receiverSignatureUrl,
       driverSignatureUrl: driverSignatureUrl ?? this.driverSignatureUrl,
       receiverSignatureBytes:
           receiverSignatureBytes ?? this.receiverSignatureBytes,
       driverSignatureBytes: driverSignatureBytes ?? this.driverSignatureBytes,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
       deliveredAt: deliveredAt ?? this.deliveredAt,
       invoicedAt: invoicedAt ?? this.invoicedAt,
     );

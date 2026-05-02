@@ -27,7 +27,7 @@ class DeliverySyncService {
 
   static Future<WaybillModel?> _syncWaybill(WaybillModel waybill) async {
     final safeWaybillNumber = _safeWaybillNumber(waybill.waybillNumber);
-    var receiverSignatureUrl = waybill.signatureUrl;
+    var receiverSignatureUrl = waybill.receiverSignatureUrl;
     var driverSignatureUrl = waybill.driverSignatureUrl;
 
     if (receiverSignatureUrl.isEmpty) {
@@ -69,9 +69,11 @@ class DeliverySyncService {
     }
 
     return waybill.copyWith(
-      signatureUrl: receiverSignatureUrl,
+      receiverSignatureUrl: receiverSignatureUrl,
       driverSignatureUrl: driverSignatureUrl,
       status: WaybillService.deliveredStatus,
+      syncStatus: 'Synced',
+      updatedAt: DateTime.now().toIso8601String(),
     );
   }
 

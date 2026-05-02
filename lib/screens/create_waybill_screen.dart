@@ -33,6 +33,7 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
   void initState() {
     super.initState();
     dateController.text = DateTime.now().toString().split(' ')[0];
+    waybillNumberController.text = WaybillService.generateNextWaybillNumber();
   }
 
   @override
@@ -57,9 +58,27 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
 
   Future<void> saveWaybill() async {
     if (_formKey.currentState!.validate()) {
+      final waybillNumber = waybillNumberController.text.trim();
+
+      if (WaybillService.getIndexByWaybillNumber(waybillNumber) != -1) {
+        waybillNumberController.text =
+            WaybillService.generateNextWaybillNumber();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Waybill number already exists. New number assigned: ${waybillNumberController.text}',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final now = DateTime.now().toIso8601String();
+
       final waybill = WaybillModel(
         bajNumber: bajNumberController.text.trim(),
-        waybillNumber: waybillNumberController.text.trim(),
+        waybillNumber: waybillNumber,
         date: dateController.text.trim(),
         poNumber: poNumberController.text.trim(),
         shippingVendor: shippingVendorController.text.trim(),
@@ -70,7 +89,8 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
         vehicleNumber: vehicleNumberController.text.trim(),
         driverName: driverNameController.text.trim(),
         comments: commentsController.text.trim(),
-        createdAt: DateTime.now().toIso8601String(),
+        createdAt: now,
+        updatedAt: now,
         hazardousCargoType: hazardousCargoTypeController.text.trim(),
         unNumber: unNumberController.text.trim(),
         tremcard: tremcardController.text.trim(),
@@ -91,13 +111,17 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
     required TextEditingController controller,
     bool requiredField = true,
     int maxLines = 1,
+    bool readOnly = false,
   }) {
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
+      readOnly: readOnly,
       decoration: InputDecoration(
         labelText: label,
         border: const OutlineInputBorder(),
+        filled: readOnly,
+        fillColor: readOnly ? const Color(0xFFEFF3F8) : null,
       ),
       validator: requiredField
           ? (value) {
@@ -141,6 +165,7 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
                         child: buildTextField(
                           label: 'Waybill Number',
                           controller: waybillNumberController,
+                          readOnly: true,
                         ),
                       ),
                       SizedBox(

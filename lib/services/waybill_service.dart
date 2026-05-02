@@ -33,6 +33,29 @@ class WaybillService {
     await _box.add(waybill.toMap());
   }
 
+  static String generateNextWaybillNumber() {
+    const prefix = 'BAJ/WB-';
+    final waybillPattern = RegExp(r'^BAJ/WB-(\d+)$');
+    var highestNumber = 0;
+
+    for (final waybill in getAllWaybills()) {
+      final match = waybillPattern.firstMatch(waybill.waybillNumber.trim());
+
+      if (match == null) {
+        continue;
+      }
+
+      final number = int.tryParse(match.group(1) ?? '') ?? 0;
+
+      if (number > highestNumber) {
+        highestNumber = number;
+      }
+    }
+
+    final nextNumber = highestNumber + 1;
+    return '$prefix${nextNumber.toString().padLeft(4, '0')}';
+  }
+
   static Future<void> updateWaybill(
     int index,
     WaybillModel updatedWaybill,
