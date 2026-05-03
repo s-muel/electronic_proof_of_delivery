@@ -120,6 +120,9 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
     final deliveredCount = filteredWaybills
         .where((waybill) => waybill.status == 'Delivered')
         .length;
+    final invoicedCount = filteredWaybills
+        .where((waybill) => waybill.status == 'Invoiced')
+        .length;
     final syncCount = filteredWaybills
         .where((waybill) => waybill.status == 'Pending Sync')
         .length;
@@ -227,6 +230,12 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
                         value: deliveredCount.toString(),
                         color: Colors.green,
                         icon: Icons.check_circle,
+                      ),
+                      _SummaryPill(
+                        label: 'Invoiced',
+                        value: invoicedCount.toString(),
+                        color: Colors.blue,
+                        icon: Icons.receipt_long,
                       ),
                       _SummaryPill(
                         label: 'Pending Sync',

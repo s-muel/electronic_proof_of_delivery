@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import '../models/waybill_model.dart';
 import '../services/delivery_sync_service.dart';
 import '../services/firebase_auth_service.dart';
 import '../services/firestore_waybill_service.dart';
+import '../services/pdf_service.dart';
 import '../services/waybill_service.dart';
 import '../utils/platform_flags.dart';
 import '../widgets/network_status_bar.dart';
@@ -104,6 +106,8 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
     required String title,
     required List<WaybillModel> waybills,
     required bool showMarkInvoicedButton,
+    int? readyCount,
+    int? invoicedCount,
   }) async {
     await Navigator.push(
       context,
@@ -112,6 +116,8 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
           title: title,
           waybills: waybills,
           showMarkInvoicedButton: showMarkInvoicedButton,
+          readyCount: readyCount,
+          invoicedCount: invoicedCount,
         ),
       ),
     );
@@ -309,6 +315,10 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
                         title: 'Ready for Invoice',
                         waybills: WaybillService.getDeliveredWaybills(),
                         showMarkInvoicedButton: true,
+                        readyCount:
+                            WaybillService.getDeliveredWaybills().length,
+                        invoicedCount:
+                            WaybillService.getInvoicedWaybills().length,
                       );
                     },
                   ),
@@ -322,6 +332,10 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
                         title: 'Invoiced Waybills',
                         waybills: WaybillService.getInvoicedWaybills(),
                         showMarkInvoicedButton: false,
+                        readyCount:
+                            WaybillService.getDeliveredWaybills().length,
+                        invoicedCount:
+                            WaybillService.getInvoicedWaybills().length,
                       );
                     },
                   ),
@@ -340,6 +354,10 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
                         title: 'View Waybills',
                         waybills: viewableWaybills,
                         showMarkInvoicedButton: false,
+                        readyCount:
+                            WaybillService.getDeliveredWaybills().length,
+                        invoicedCount:
+                            WaybillService.getInvoicedWaybills().length,
                       );
                     },
                   ),
@@ -357,12 +375,16 @@ class AccountsWaybillListScreen extends StatefulWidget {
   final String title;
   final List<WaybillModel> waybills;
   final bool showMarkInvoicedButton;
+  final int? readyCount;
+  final int? invoicedCount;
 
   const AccountsWaybillListScreen({
     super.key,
     required this.title,
     required this.waybills,
     required this.showMarkInvoicedButton,
+    this.readyCount,
+    this.invoicedCount,
   });
 
   @override
@@ -373,6 +395,7 @@ class AccountsWaybillListScreen extends StatefulWidget {
 class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
   late List<WaybillModel> allWaybills;
   late List<WaybillModel> filteredWaybills;
+  final Set<String> _downloadingPdfWaybillNumbers = {};
 
   final searchController = TextEditingController();
 
@@ -450,6 +473,41 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
     );
   }
 
+  Future<void> downloadWaybillPdf(WaybillModel waybill) async {
+    if (_downloadingPdfWaybillNumbers.contains(waybill.waybillNumber)) return;
+
+    setState(() {
+      _downloadingPdfWaybillNumbers.add(waybill.waybillNumber);
+    });
+
+    try {
+      final pdfBytes = await PdfService.generateWaybillPdf(
+        waybill,
+        receiverSignatureBytes: waybill.receiverSignatureBytes,
+        driverSignatureBytes: waybill.driverSignatureBytes,
+      );
+
+      await Printing.layoutPdf(
+        name: 'Waybill_${waybill.waybillNumber}.pdf',
+        onLayout: (_) async => pdfBytes,
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not prepare the PDF. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _downloadingPdfWaybillNumbers.remove(waybill.waybillNumber);
+        });
+      }
+    }
+  }
+
   Future<void> markAsInvoiced(int index, WaybillModel waybill) async {
     if (index == -1) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -522,6 +580,13 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
     final IconData pageIcon = widget.showMarkInvoicedButton
         ? Icons.receipt_long
         : Icons.done_all;
+    final readyCount =
+        widget.readyCount ??
+        allWaybills.where((waybill) => waybill.status == 'Delivered').length;
+    final invoicedCount = allWaybills
+        .where((waybill) => waybill.status == 'Invoiced')
+        .length;
+    final displayInvoicedCount = widget.invoicedCount ?? invoicedCount;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
@@ -614,7 +679,9 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
                         label: widget.showMarkInvoicedButton
                             ? 'Ready'
                             : 'Invoiced',
-                        value: allWaybills.length.toString(),
+                        value: widget.showMarkInvoicedButton
+                            ? readyCount.toString()
+                            : displayInvoicedCount.toString(),
                         color: pageColor,
                         icon: pageIcon,
                       ),
@@ -772,6 +839,28 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
                         onPressed: () =>
                             openWaybillDetails(originalIndex, waybill),
                       ),
+                      IconButton(
+                        tooltip: 'Download PDF',
+                        icon: _downloadingPdfWaybillNumbers.contains(
+                          waybill.waybillNumber,
+                        )
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.download,
+                                color: Colors.blue,
+                              ),
+                        onPressed: _downloadingPdfWaybillNumbers.contains(
+                          waybill.waybillNumber,
+                        )
+                            ? null
+                            : () => downloadWaybillPdf(waybill),
+                      ),
                       if (widget.showMarkInvoicedButton &&
                           waybill.status == 'Delivered')
                         IconButton(
@@ -792,6 +881,8 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
   }
 
   Widget _buildTableView() {
+    final actionColumnWidth = widget.showMarkInvoicedButton ? 430.0 : 250.0;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -811,7 +902,9 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 1180),
+              constraints: BoxConstraints(
+                minWidth: widget.showMarkInvoicedButton ? 1330 : 1180,
+              ),
               child: DataTable(
                 columnSpacing: 24,
                 horizontalMargin: 18,
@@ -820,20 +913,28 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
                 headingRowColor: WidgetStateProperty.all(
                   const Color(0xFFEAF3FF),
                 ),
-                columns: const [
-                  DataColumn(label: Text('Waybill No.')),
-                  DataColumn(label: Text('BAJ No.')),
-                  DataColumn(label: Text('Date')),
-                  DataColumn(label: Text('Shipping/Vendor')),
-                  DataColumn(label: Text('Delivered At')),
-                  DataColumn(label: Text('Status')),
-                  DataColumn(label: Text('Actions')),
+                columns: [
+                  const DataColumn(label: Text('Waybill No.')),
+                  const DataColumn(label: Text('BAJ No.')),
+                  const DataColumn(label: Text('Date')),
+                  const DataColumn(label: Text('Shipping/Vendor')),
+                  const DataColumn(label: Text('Delivered At')),
+                  const DataColumn(label: Text('Status')),
+                  DataColumn(
+                    label: SizedBox(
+                      width: actionColumnWidth,
+                      child: const Center(child: Text('Actions')),
+                    ),
+                  ),
                 ],
                 rows: filteredWaybills.map((waybill) {
                   final originalIndex = WaybillService.getIndexByWaybillNumber(
                     waybill.waybillNumber,
                   );
                   final statusColor = getStatusColor(waybill.status);
+                  final isDownloading = _downloadingPdfWaybillNumbers.contains(
+                    waybill.waybillNumber,
+                  );
 
                   return DataRow(
                     cells: [
@@ -863,32 +964,52 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
                       ),
                       DataCell(
                         SizedBox(
-                          width: widget.showMarkInvoicedButton ? 275 : 120,
-                          child: Wrap(
-                            spacing: 8,
-                            runSpacing: 4,
-                            children: [
-                              FilledButton.tonalIcon(
-                                onPressed: () =>
-                                    openWaybillDetails(originalIndex, waybill),
-                                icon: const Icon(Icons.visibility, size: 16),
-                                label: const Text('View'),
-                              ),
-                              if (widget.showMarkInvoicedButton &&
-                                  waybill.status == 'Delivered')
-                                FilledButton.icon(
-                                  onPressed: () => confirmMarkAsInvoiced(
-                                    originalIndex,
-                                    waybill,
-                                  ),
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: Colors.blue,
-                                    foregroundColor: Colors.white,
-                                  ),
-                                  icon: const Icon(Icons.done_all, size: 16),
-                                  label: const Text('Mark Invoiced'),
+                          width: actionColumnWidth,
+                          child: Center(
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              alignment: WrapAlignment.center,
+                              children: [
+                                FilledButton.tonalIcon(
+                                  onPressed: () =>
+                                      openWaybillDetails(originalIndex, waybill),
+                                  icon: const Icon(Icons.visibility, size: 16),
+                                  label: const Text('View'),
                                 ),
-                            ],
+                                FilledButton.tonalIcon(
+                                  onPressed: isDownloading
+                                      ? null
+                                      : () => downloadWaybillPdf(waybill),
+                                  icon: isDownloading
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Icon(Icons.download, size: 16),
+                                  label: Text(
+                                    isDownloading ? 'Preparing' : 'Download',
+                                  ),
+                                ),
+                                if (widget.showMarkInvoicedButton &&
+                                    waybill.status == 'Delivered')
+                                  FilledButton.icon(
+                                    onPressed: () => confirmMarkAsInvoiced(
+                                      originalIndex,
+                                      waybill,
+                                    ),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: Colors.blue,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    icon: const Icon(Icons.done_all, size: 16),
+                                    label: const Text('Mark Invoiced'),
+                                  ),
+                              ],
+                            ),
                           ),
                         ),
                       ),

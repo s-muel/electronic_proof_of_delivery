@@ -23,6 +23,7 @@ class WaybillDetailsScreen extends StatefulWidget {
 
 class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
   late WaybillModel currentWaybill;
+  bool _isDownloadingPdf = false;
 
   @override
   void initState() {
@@ -31,16 +32,34 @@ class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
   }
 
   Future<void> downloadPdf() async {
-    final pdfBytes = await PdfService.generateWaybillPdf(
-      currentWaybill,
-      receiverSignatureBytes: currentWaybill.receiverSignatureBytes,
-      driverSignatureBytes: currentWaybill.driverSignatureBytes,
-    );
+    if (_isDownloadingPdf) return;
 
-    await Printing.layoutPdf(
-      name: 'Waybill_${currentWaybill.waybillNumber}.pdf',
-      onLayout: (_) async => pdfBytes,
-    );
+    setState(() => _isDownloadingPdf = true);
+
+    try {
+      final pdfBytes = await PdfService.generateWaybillPdf(
+        currentWaybill,
+        receiverSignatureBytes: currentWaybill.receiverSignatureBytes,
+        driverSignatureBytes: currentWaybill.driverSignatureBytes,
+      );
+
+      await Printing.layoutPdf(
+        name: 'Waybill_${currentWaybill.waybillNumber}.pdf',
+        onLayout: (_) async => pdfBytes,
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not prepare the PDF. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isDownloadingPdf = false);
+      }
+    }
   }
 
   void editWaybill() async {
@@ -77,13 +96,22 @@ class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: FilledButton.icon(
-              onPressed: downloadPdf,
+              onPressed: _isDownloadingPdf ? null : downloadPdf,
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF16A34A),
                 foregroundColor: Colors.white,
               ),
-              icon: const Icon(Icons.picture_as_pdf, size: 18),
-              label: const Text('Download PDF'),
+              icon: _isDownloadingPdf
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.picture_as_pdf, size: 18),
+              label: Text(_isDownloadingPdf ? 'Preparing PDF' : 'Download PDF'),
             ),
           ),
           if (canEdit)

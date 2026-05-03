@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+
+import '../utils/network_checker.dart';
 
 class NetworkStatusBar extends StatefulWidget {
   final VoidCallback? onSyncNow;
@@ -50,14 +51,12 @@ class _NetworkStatusChipState extends State<NetworkStatusChip> {
     setState(() => _isChecking = true);
 
     try {
-      final response = await http
-          .get(Uri.parse('https://www.google.com/generate_204'))
-          .timeout(const Duration(seconds: 4));
+      final isOnline = await hasNetworkConnection();
 
       if (!mounted) return;
 
       setState(() {
-        _isOnline = response.statusCode >= 200 && response.statusCode < 400;
+        _isOnline = isOnline;
         _isChecking = false;
       });
     } catch (_) {
@@ -178,14 +177,12 @@ class _NetworkStatusBarState extends State<NetworkStatusBar> {
     setState(() => _isChecking = true);
 
     try {
-      final response = await http
-          .get(Uri.parse('https://www.google.com/generate_204'))
-          .timeout(const Duration(seconds: 4));
+      final isOnline = await hasNetworkConnection();
 
       if (!mounted) return;
 
       setState(() {
-        _isOnline = response.statusCode >= 200 && response.statusCode < 400;
+        _isOnline = isOnline;
         _isChecking = false;
       });
     } catch (_) {
