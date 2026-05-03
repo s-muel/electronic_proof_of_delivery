@@ -34,10 +34,27 @@ class WaybillService {
   }
 
   static Future<void> replaceCachedWaybills(List<WaybillModel> waybills) async {
+    final pendingSyncByWaybillNumber = {
+      for (final waybill in getPendingSyncWaybills())
+        waybill.waybillNumber: waybill,
+    };
+    final cachedWaybillNumbers = <String>{};
+
     await _box.clear();
 
     for (final waybill in waybills) {
-      await _box.add(waybill.toMap());
+      final pendingSyncWaybill =
+          pendingSyncByWaybillNumber[waybill.waybillNumber];
+      final waybillToCache = pendingSyncWaybill ?? waybill;
+
+      await _box.add(waybillToCache.toMap());
+      cachedWaybillNumbers.add(waybillToCache.waybillNumber);
+    }
+
+    for (final pendingSyncWaybill in pendingSyncByWaybillNumber.values) {
+      if (!cachedWaybillNumbers.contains(pendingSyncWaybill.waybillNumber)) {
+        await _box.add(pendingSyncWaybill.toMap());
+      }
     }
   }
 
@@ -71,6 +88,18 @@ class WaybillService {
     if (index >= 0 && index < _box.length) {
       await _box.putAt(index, updatedWaybill.toMap());
     }
+  }
+
+  static Future<bool> updateWaybillByNumber(WaybillModel updatedWaybill) async {
+    final index = getIndexByWaybillNumber(updatedWaybill.waybillNumber);
+
+    if (index >= 0 && index < _box.length) {
+      await _box.putAt(index, updatedWaybill.toMap());
+      return true;
+    }
+
+    await _box.add(updatedWaybill.toMap());
+    return false;
   }
 
   static List<WaybillModel> getPendingWaybills() {

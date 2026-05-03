@@ -23,6 +23,13 @@ class _DriverDashboardState extends State<DriverDashboard> {
   List<WaybillModel> pendingSyncWaybills = [];
   bool isSyncing = false;
 
+  List<WaybillModel> get visibleWaybills {
+    return [
+      ...pendingSyncWaybills,
+      ...pendingWaybills,
+    ];
+  }
+
   @override
   void initState() {
     super.initState();
@@ -165,7 +172,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
           ),
         ],
       ),
-      body: pendingWaybills.isEmpty && pendingSyncWaybills.isEmpty
+      body: visibleWaybills.isEmpty
           ? const Center(
               child: Text(
                 'No pending delivery waybills available',
@@ -220,9 +227,9 @@ class _DriverDashboardState extends State<DriverDashboard> {
 
   Widget _buildListView() {
     return ListView.builder(
-      itemCount: pendingWaybills.length,
+      itemCount: visibleWaybills.length,
       itemBuilder: (context, index) {
-        final waybill = pendingWaybills[index];
+        final waybill = visibleWaybills[index];
         final originalIndex = WaybillService.getIndexByWaybillNumber(
           waybill.waybillNumber,
         );
@@ -266,7 +273,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
           DataColumn(label: Text('Status')),
           DataColumn(label: Text('Action')),
         ],
-        rows: pendingWaybills.map((waybill) {
+        rows: visibleWaybills.map((waybill) {
           final originalIndex = WaybillService.getIndexByWaybillNumber(
             waybill.waybillNumber,
           );

@@ -19,7 +19,7 @@ class DeliverySyncService {
       final syncedWaybill = await _syncWaybill(waybill);
 
       if (syncedWaybill != null) {
-        await WaybillService.updateWaybill(index, syncedWaybill);
+        await WaybillService.updateWaybillByNumber(syncedWaybill);
         if (shouldUseFirestoreData) {
           await FirestoreWaybillService.updateWaybill(syncedWaybill);
         }

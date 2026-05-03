@@ -62,8 +62,15 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
     isPartOrder = widget.waybill.isPartOrder;
     isCompleteOrder = widget.waybill.isCompleteOrder;
 
-    receiverSignatureCaptured = widget.waybill.receiverSignatureUrl.isNotEmpty;
-    driverSignatureCaptured = widget.waybill.driverSignatureUrl.isNotEmpty;
+    receiverSignatureBytes = widget.waybill.receiverSignatureBytes;
+    driverSignatureBytes = widget.waybill.driverSignatureBytes;
+
+    receiverSignatureCaptured =
+        widget.waybill.receiverSignatureUrl.isNotEmpty ||
+        receiverSignatureBytes != null;
+    driverSignatureCaptured =
+        widget.waybill.driverSignatureUrl.isNotEmpty ||
+        driverSignatureBytes != null;
   }
 
   @override
@@ -216,7 +223,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
         updatedAt: now,
       );
 
-      await WaybillService.updateWaybill(widget.index, updatedWaybill);
+      await WaybillService.updateWaybillByNumber(updatedWaybill);
       if (uploadedOnline && shouldUseFirestoreData) {
         try {
           await FirestoreWaybillService.updateWaybill(updatedWaybill);

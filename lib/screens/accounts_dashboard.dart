@@ -559,69 +559,82 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
     return SingleChildScrollView(
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        child: DataTable(
-          columnSpacing: 28,
-          headingRowColor: WidgetStateProperty.all(
-            Colors.blue.withValues(alpha: 0.08),
-          ),
-          columns: const [
-            DataColumn(label: Text('Waybill No.')),
-            DataColumn(label: Text('BAJ No.')),
-            DataColumn(label: Text('Date')),
-            DataColumn(label: Text('Shipping/Vendor')),
-            DataColumn(label: Text('Delivered At')),
-            DataColumn(label: Text('Status')),
-            DataColumn(label: Text('Actions')),
-          ],
-          rows: filteredWaybills.map((waybill) {
-            final originalIndex = WaybillService.getIndexByWaybillNumber(
-              waybill.waybillNumber,
-            );
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 1180),
+          child: DataTable(
+            columnSpacing: 24,
+            headingRowColor: WidgetStateProperty.all(
+              Colors.blue.withValues(alpha: 0.08),
+            ),
+            columns: const [
+              DataColumn(label: Text('Waybill No.')),
+              DataColumn(label: Text('BAJ No.')),
+              DataColumn(label: Text('Date')),
+              DataColumn(label: Text('Shipping/Vendor')),
+              DataColumn(label: Text('Delivered At')),
+              DataColumn(label: Text('Status')),
+              DataColumn(label: Text('Actions')),
+            ],
+            rows: filteredWaybills.map((waybill) {
+              final originalIndex = WaybillService.getIndexByWaybillNumber(
+                waybill.waybillNumber,
+              );
 
-            return DataRow(
-              cells: [
-                DataCell(Text(waybill.waybillNumber)),
-                DataCell(Text(waybill.bajNumber)),
-                DataCell(Text(waybill.date)),
-                DataCell(Text(waybill.shippingVendor)),
-                DataCell(Text(_formatDateTime(waybill.deliveredAt))),
-                DataCell(
-                  Chip(
-                    label: Text(waybill.status),
-                    backgroundColor: getStatusColor(
-                      waybill.status,
-                    ).withValues(alpha: 0.15),
-                    labelStyle: TextStyle(
-                      color: getStatusColor(waybill.status),
-                      fontWeight: FontWeight.bold,
+              return DataRow(
+                cells: [
+                  DataCell(Text(waybill.waybillNumber)),
+                  DataCell(Text(waybill.bajNumber)),
+                  DataCell(Text(waybill.date)),
+                  DataCell(
+                    SizedBox(
+                      width: 170,
+                      child: Text(
+                        waybill.shippingVendor,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
-                ),
-                DataCell(
-                  SizedBox(
-                    width: widget.showMarkInvoicedButton ? 210 : 90,
-                    child: Row(
-                      children: [
-                        TextButton(
-                          onPressed: () =>
-                              openWaybillDetails(originalIndex, waybill),
-                          child: const Text('View'),
-                        ),
-                        if (widget.showMarkInvoicedButton &&
-                            waybill.status == 'Delivered')
-                          TextButton.icon(
+                  DataCell(Text(_formatDateTime(waybill.deliveredAt))),
+                  DataCell(
+                    Chip(
+                      label: Text(waybill.status),
+                      backgroundColor: getStatusColor(
+                        waybill.status,
+                      ).withValues(alpha: 0.15),
+                      labelStyle: TextStyle(
+                        color: getStatusColor(waybill.status),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  DataCell(
+                    SizedBox(
+                      width: widget.showMarkInvoicedButton ? 240 : 100,
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          TextButton(
                             onPressed: () =>
-                                confirmMarkAsInvoiced(originalIndex, waybill),
-                            icon: const Icon(Icons.done_all, size: 16),
-                            label: const Text('Mark Invoiced'),
+                                openWaybillDetails(originalIndex, waybill),
+                            child: const Text('View'),
                           ),
-                      ],
+                          if (widget.showMarkInvoicedButton &&
+                              waybill.status == 'Delivered')
+                            TextButton.icon(
+                              onPressed: () =>
+                                  confirmMarkAsInvoiced(originalIndex, waybill),
+                              icon: const Icon(Icons.done_all, size: 16),
+                              label: const Text('Mark Invoiced'),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
-            );
-          }).toList(),
+                ],
+              );
+            }).toList(),
+          ),
         ),
       ),
     );
