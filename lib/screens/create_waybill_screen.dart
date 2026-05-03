@@ -34,7 +34,7 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
   @override
   void initState() {
     super.initState();
-    dateController.text = DateTime.now().toString().split(' ')[0];
+    dateController.text = _formatDate(DateTime.now());
     waybillNumberController.text = WaybillService.generateNextWaybillNumber();
   }
 
@@ -141,6 +141,8 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
     bool requiredField = true,
     int maxLines = 1,
     bool readOnly = false,
+    IconData? icon,
+    String? helperText,
   }) {
     return TextFormField(
       controller: controller,
@@ -148,9 +150,26 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
       readOnly: readOnly,
       decoration: InputDecoration(
         labelText: label,
-        border: const OutlineInputBorder(),
-        filled: readOnly,
-        fillColor: readOnly ? const Color(0xFFEFF3F8) : null,
+        helperText: helperText,
+        prefixIcon: icon == null ? null : Icon(icon),
+        filled: true,
+        fillColor: readOnly ? const Color(0xFFEFF3F8) : Colors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 14,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFD0D7DE)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFD0D7DE)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Colors.blue, width: 1.5),
+        ),
       ),
       validator: requiredField
           ? (value) {
@@ -160,6 +179,129 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
               return null;
             }
           : null,
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> pickDate() async {
+    final currentDate =
+        DateTime.tryParse(dateController.text) ?? DateTime.now();
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: currentDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+
+    if (selectedDate == null) {
+      return;
+    }
+
+    setState(() {
+      dateController.text = _formatDate(selectedDate);
+    });
+  }
+
+  Widget buildDateField() {
+    return TextFormField(
+      controller: dateController,
+      readOnly: true,
+      onTap: pickDate,
+      decoration: InputDecoration(
+        labelText: 'Date',
+        helperText: 'Tap to select date',
+        prefixIcon: const Icon(Icons.calendar_today),
+        suffixIcon: IconButton(
+          onPressed: pickDate,
+          icon: const Icon(Icons.event, color: Colors.white),
+        ),
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 14,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFD0D7DE)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFD0D7DE)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Colors.blue, width: 1.5),
+        ),
+      ),
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return 'Date is required';
+        }
+
+        return null;
+      },
+    );
+  }
+
+  Widget _sectionCard({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
+    return Card(
+      elevation: 1.5,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE3E8EF)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: Colors.blue, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Wrap(spacing: 16, runSpacing: 16, children: children),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _fieldBox({
+    required bool isWideScreen,
+    required Widget child,
+    double? wideWidth,
+  }) {
+    return SizedBox(
+      width: isWideScreen ? (wideWidth ?? 452) : double.infinity,
+      child: child,
     );
   }
 
@@ -177,127 +319,201 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
             child: Form(
               key: _formKey,
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 16,
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFEAF3FF), Color(0xFFF8FBFF)],
+                      ),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: const Color(0xFFD8E7FB)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.receipt_long, color: Colors.blue, size: 34),
+                        SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'New Waybill',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'Enter the BAJ reference and delivery details. The waybill number is generated automatically.',
+                                style: TextStyle(color: Colors.black54),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  _sectionCard(
+                    title: 'Reference Details',
+                    icon: Icons.tag,
                     children: [
-                      SizedBox(
-                        width: isWideScreen ? 480 : double.infinity,
+                      _fieldBox(
+                        isWideScreen: isWideScreen,
                         child: buildTextField(
                           label: 'BAJ Number',
                           controller: bajNumberController,
+                          icon: Icons.confirmation_number,
+                          helperText: 'Enter BAJ number from external system',
                         ),
                       ),
-                      SizedBox(
-                        width: isWideScreen ? 480 : double.infinity,
+                      _fieldBox(
+                        isWideScreen: isWideScreen,
                         child: buildTextField(
                           label: 'Waybill Number',
                           controller: waybillNumberController,
                           readOnly: true,
+                          icon: Icons.auto_awesome,
+                          helperText: 'Auto-generated',
                         ),
                       ),
-                      SizedBox(
-                        width: isWideScreen ? 480 : double.infinity,
-                        child: buildTextField(
-                          label: 'Date',
-                          controller: dateController,
-                        ),
+                      _fieldBox(
+                        isWideScreen: isWideScreen,
+                        child: buildDateField(),
                       ),
-                      SizedBox(
-                        width: isWideScreen ? 480 : double.infinity,
+                      _fieldBox(
+                        isWideScreen: isWideScreen,
                         child: buildTextField(
                           label: 'P.O. Number',
                           controller: poNumberController,
                           requiredField: false,
+                          icon: Icons.assignment,
                         ),
                       ),
-                      SizedBox(
-                        width: isWideScreen ? 480 : double.infinity,
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  _sectionCard(
+                    title: 'Parties & Delivery',
+                    icon: Icons.local_shipping,
+                    children: [
+                      _fieldBox(
+                        isWideScreen: isWideScreen,
                         child: buildTextField(
                           label: 'Shipping/Vendor',
                           controller: shippingVendorController,
+                          icon: Icons.business,
                         ),
                       ),
-                      SizedBox(
-                        width: isWideScreen ? 480 : double.infinity,
+                      _fieldBox(
+                        isWideScreen: isWideScreen,
                         child: buildTextField(
                           label: 'Consignee/Receiver',
                           controller: consigneeReceiverController,
+                          icon: Icons.person,
                         ),
                       ),
-                      SizedBox(
-                        width: isWideScreen ? 480 : double.infinity,
+                      _fieldBox(
+                        isWideScreen: isWideScreen,
                         child: buildTextField(
                           label: 'Other Delivery Address',
                           controller: deliveryAddressController,
                           requiredField: false,
+                          icon: Icons.location_on,
                         ),
                       ),
-                      SizedBox(
-                        width: isWideScreen ? 480 : double.infinity,
-                        child: buildTextField(
-                          label: 'Gross Weight',
-                          controller: grossWeightController,
-                          requiredField: false,
-                        ),
-                      ),
-                      SizedBox(
-                        width: isWideScreen ? 480 : double.infinity,
+                      _fieldBox(
+                        isWideScreen: isWideScreen,
                         child: buildTextField(
                           label: 'Vehicle Number',
                           controller: vehicleNumberController,
                           requiredField: false,
+                          icon: Icons.directions_car,
                         ),
                       ),
-                      SizedBox(
-                        width: isWideScreen ? 480 : double.infinity,
+                      _fieldBox(
+                        isWideScreen: isWideScreen,
                         child: buildTextField(
                           label: 'Driver Name',
                           controller: driverNameController,
                           requiredField: false,
+                          icon: Icons.badge,
                         ),
                       ),
-                      SizedBox(
-                        width: isWideScreen ? 976 : double.infinity,
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  _sectionCard(
+                    title: 'Cargo Details',
+                    icon: Icons.inventory_2,
+                    children: [
+                      _fieldBox(
+                        isWideScreen: isWideScreen,
+                        child: buildTextField(
+                          label: 'Gross Weight',
+                          controller: grossWeightController,
+                          requiredField: false,
+                          icon: Icons.scale,
+                        ),
+                      ),
+                      _fieldBox(
+                        isWideScreen: isWideScreen,
+                        wideWidth: isWideScreen ? 920 : null,
                         child: buildTextField(
                           label: 'Description of Cargo',
                           controller: cargoDescriptionController,
                           maxLines: 3,
+                          icon: Icons.description,
                         ),
                       ),
-                      SizedBox(
-                        width: isWideScreen ? 976 : double.infinity,
+                      _fieldBox(
+                        isWideScreen: isWideScreen,
+                        wideWidth: isWideScreen ? 920 : null,
                         child: buildTextField(
                           label: 'Comments/Special Instruction',
                           controller: commentsController,
                           requiredField: false,
                           maxLines: 1,
+                          icon: Icons.notes,
                         ),
                       ),
-
-                      SizedBox(
-                        width: isWideScreen ? 480 : double.infinity,
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  _sectionCard(
+                    title: 'Hazardous Cargo',
+                    icon: Icons.warning_amber,
+                    children: [
+                      _fieldBox(
+                        isWideScreen: isWideScreen,
                         child: buildTextField(
                           label: 'Hazardous Cargo Type',
                           controller: hazardousCargoTypeController,
                           requiredField: false,
+                          icon: Icons.dangerous,
                         ),
                       ),
-                      SizedBox(
-                        width: isWideScreen ? 240 : double.infinity,
+                      _fieldBox(
+                        isWideScreen: isWideScreen,
+                        wideWidth: 220,
                         child: buildTextField(
                           label: 'UN Number',
                           controller: unNumberController,
                           requiredField: false,
+                          icon: Icons.pin,
                         ),
                       ),
-                      SizedBox(
-                        width: isWideScreen ? 240 : double.infinity,
+                      _fieldBox(
+                        isWideScreen: isWideScreen,
+                        wideWidth: 220,
                         child: buildTextField(
                           label: 'Tremcard',
                           controller: tremcardController,
                           requiredField: false,
+                          icon: Icons.article,
                         ),
                       ),
                     ],

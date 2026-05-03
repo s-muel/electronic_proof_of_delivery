@@ -29,18 +29,19 @@ class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
     super.initState();
     currentWaybill = widget.waybill;
   }
-Future<void> downloadPdf() async {
-  final pdfBytes = await PdfService.generateWaybillPdf(
-    currentWaybill,
-    receiverSignatureBytes: currentWaybill.receiverSignatureBytes,
-    driverSignatureBytes: currentWaybill.driverSignatureBytes,
-  );
 
-  await Printing.layoutPdf(
-    name: 'Waybill_${currentWaybill.waybillNumber}.pdf',
-    onLayout: (_) async => pdfBytes,
-  );
-}
+  Future<void> downloadPdf() async {
+    final pdfBytes = await PdfService.generateWaybillPdf(
+      currentWaybill,
+      receiverSignatureBytes: currentWaybill.receiverSignatureBytes,
+      driverSignatureBytes: currentWaybill.driverSignatureBytes,
+    );
+
+    await Printing.layoutPdf(
+      name: 'Waybill_${currentWaybill.waybillNumber}.pdf',
+      onLayout: (_) async => pdfBytes,
+    );
+  }
 
   void editWaybill() async {
     final result = await Navigator.push(
@@ -63,42 +64,222 @@ Future<void> downloadPdf() async {
     final bool canEdit = currentWaybill.status == 'Pending Delivery';
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF4F7FB),
       appBar: AppBar(
-        title: Text('Waybill No: ${currentWaybill.waybillNumber}'),
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF1F2937),
+        elevation: 0.5,
+        title: Text(
+          'Waybill ${currentWaybill.waybillNumber}',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
         actions: [
-          TextButton.icon(
-            onPressed: downloadPdf,
-            icon: const Icon(Icons.picture_as_pdf, color: Colors.green),
-            label: const Text(
-              'Download PDF',
-              style: TextStyle(color: Colors.green),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: FilledButton.icon(
+              onPressed: downloadPdf,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF16A34A),
+                foregroundColor: Colors.white,
+              ),
+              icon: const Icon(Icons.picture_as_pdf, size: 18),
+              label: const Text('Download PDF'),
             ),
           ),
           if (canEdit)
-            TextButton.icon(
-              onPressed: editWaybill,
-              icon: const Icon(Icons.edit, color: Colors.blue),
-              label: const Text('Edit', style: TextStyle(color: Colors.blue)),
-            ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: Container(
-        color: const Color(0xFFE9EEF5),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Center(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: WaybillTemplateWidget(
-                waybill: currentWaybill,
-                receiverSignatureBytes: currentWaybill.receiverSignatureBytes,
-                driverSignatureBytes: currentWaybill.driverSignatureBytes,
+            Padding(
+              padding: const EdgeInsets.only(left: 8, top: 8, bottom: 8),
+              child: OutlinedButton.icon(
+                onPressed: editWaybill,
+                icon: const Icon(Icons.edit, size: 18),
+                label: const Text('Edit'),
               ),
             ),
-          ),
+          const SizedBox(width: 12),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1100),
+                child: _WaybillHeaderCard(waybill: currentWaybill),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Center(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFFDDE5EF)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.07),
+                      blurRadius: 22,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: WaybillTemplateWidget(
+                      waybill: currentWaybill,
+                      receiverSignatureBytes:
+                          currentWaybill.receiverSignatureBytes,
+                      driverSignatureBytes: currentWaybill.driverSignatureBytes,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+class _WaybillHeaderCard extends StatelessWidget {
+  final WaybillModel waybill;
+
+  const _WaybillHeaderCard({required this.waybill});
+
+  Color get _statusColor {
+    switch (waybill.status) {
+      case 'Pending Delivery':
+        return Colors.orange;
+      case 'Pending Sync':
+        return Colors.deepOrange;
+      case 'Delivered':
+        return Colors.green;
+      case 'Invoiced':
+        return Colors.blue;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFEAF3FF), Color(0xFFFFFFFF)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFD7E7FB)),
+      ),
+      child: Wrap(
+        spacing: 18,
+        runSpacing: 14,
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.receipt_long,
+                  color: Colors.blue,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    waybill.waybillNumber,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF172033),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'BAJ No: ${waybill.bajNumber}',
+                    style: const TextStyle(color: Colors.black54),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          _HeaderInfo(icon: Icons.calendar_today, label: 'Date', value: waybill.date),
+          _HeaderInfo(
+            icon: Icons.business,
+            label: 'Vendor',
+            value: waybill.shippingVendor,
+          ),
+          Chip(
+            avatar: Icon(Icons.circle, size: 12, color: _statusColor),
+            label: Text(waybill.status),
+            backgroundColor: _statusColor.withValues(alpha: 0.12),
+            side: BorderSide(color: _statusColor.withValues(alpha: 0.25)),
+            labelStyle: TextStyle(
+              color: _statusColor,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeaderInfo extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _HeaderInfo({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: const Color(0xFF64748B), size: 20),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+            const SizedBox(height: 2),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 210),
+              child: Text(
+                value.isEmpty ? '-' : value,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1F2937),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
