@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/waybill_model.dart';
+import '../services/firestore_waybill_service.dart';
 import '../services/waybill_service.dart';
+import '../utils/platform_flags.dart';
 
 class CreateWaybillScreen extends StatefulWidget {
   const CreateWaybillScreen({super.key});
@@ -58,7 +60,17 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
 
   Future<void> saveWaybill() async {
     if (_formKey.currentState!.validate()) {
-      final waybillNumber = waybillNumberController.text.trim();
+      var waybillNumber = waybillNumberController.text.trim();
+
+      if (shouldUseFirestoreData) {
+        try {
+          waybillNumber =
+              await FirestoreWaybillService.generateNextWaybillNumber();
+          waybillNumberController.text = waybillNumber;
+        } catch (_) {
+          waybillNumber = waybillNumberController.text.trim();
+        }
+      }
 
       if (WaybillService.getIndexByWaybillNumber(waybillNumber) != -1) {
         waybillNumberController.text =
@@ -97,6 +109,23 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
       );
 
       await WaybillService.addWaybill(waybill);
+      if (shouldUseFirestoreData) {
+        try {
+          await FirestoreWaybillService.createWaybill(waybill);
+        } catch (_) {
+          if (!mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Waybill saved locally. It will need internet to sync online.',
+              ),
+            ),
+          );
+          Navigator.pop(context);
+          return;
+        }
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Waybill created successfully')),

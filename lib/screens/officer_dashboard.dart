@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../services/delivery_sync_service.dart';
+import '../services/firebase_auth_service.dart';
+import '../services/firestore_waybill_service.dart';
 import '../services/waybill_service.dart';
+import '../utils/platform_flags.dart';
 import '../widgets/network_status_bar.dart';
 import 'login_screen.dart';
 import 'create_waybill_screen.dart';
@@ -22,10 +25,29 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
   @override
   void initState() {
     super.initState();
-    loadDashboardCounts();
+    if (shouldSkipAutomaticFirebaseRefresh) {
+      setState(() {
+        pendingCount = WaybillService.getPendingWaybills().length;
+        deliveredCount = WaybillService.getDeliveredWaybills().length;
+        invoicedCount = WaybillService.getInvoicedWaybills().length;
+      });
+    } else {
+      loadDashboardCounts();
+    }
   }
 
-  void loadDashboardCounts() {
+  Future<void> loadDashboardCounts() async {
+    if (shouldUseFirestoreData) {
+      try {
+        final allWaybills = await FirestoreWaybillService.getAllWaybills();
+        await WaybillService.replaceCachedWaybills(allWaybills);
+      } catch (_) {
+        // Keep using the local cache when Firestore is unavailable.
+      }
+    }
+
+    if (!mounted) return;
+
     setState(() {
       pendingCount = WaybillService.getPendingWaybills().length;
       deliveredCount = WaybillService.getDeliveredWaybills().length;
@@ -36,6 +58,17 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
   Future<void> syncNow() async {
     if (isSyncing) return;
 
+    if (!shouldUseFirestoreData) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Online sync is disabled on Windows desktop. Please use Chrome or Android for Firebase sync.',
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() => isSyncing = true);
 
     final syncedCount = await DeliverySyncService.syncPendingDeliveries();
@@ -43,7 +76,7 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
     if (!mounted) return;
 
     setState(() => isSyncing = false);
-    loadDashboardCounts();
+    await loadDashboardCounts();
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -56,7 +89,11 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
     );
   }
 
-  void _logout(BuildContext context) {
+  Future<void> _logout(BuildContext context) async {
+    await FirebaseAuthService.signOut();
+
+    if (!context.mounted) return;
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -69,7 +106,7 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
       MaterialPageRoute(builder: (_) => const CreateWaybillScreen()),
     );
 
-    loadDashboardCounts();
+    await loadDashboardCounts();
   }
 
   Future<void> _openViewWaybills(BuildContext context) async {
@@ -78,7 +115,7 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
       MaterialPageRoute(builder: (_) => const ViewWaybillsScreen()),
     );
 
-    loadDashboardCounts();
+    await loadDashboardCounts();
   }
 
   @override
@@ -90,7 +127,7 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
         title: const Text('Officer In Charge Dashboard'),
         actions: [
           IconButton(
-            onPressed: loadDashboardCounts,
+            onPressed: () => loadDashboardCounts(),
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh Dashboard',
           ),
@@ -103,7 +140,7 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          loadDashboardCounts();
+          await loadDashboardCounts();
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),

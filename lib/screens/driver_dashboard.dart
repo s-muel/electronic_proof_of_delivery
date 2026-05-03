@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/waybill_model.dart';
 import '../services/delivery_sync_service.dart';
+import '../services/firebase_auth_service.dart';
+import '../services/firestore_waybill_service.dart';
 import '../services/waybill_service.dart';
+import '../utils/platform_flags.dart';
 import '../widgets/network_status_bar.dart';
 import 'login_screen.dart';
 //import 'waybill_details_screen.dart';
@@ -24,7 +27,10 @@ class _DriverDashboardState extends State<DriverDashboard> {
   void initState() {
     super.initState();
     loadPendingWaybills();
-    refreshDashboard();
+    if (!shouldSkipAutomaticFirebaseRefresh) {
+      loadPendingWaybillsFromFirestore();
+      refreshDashboard();
+    }
   }
 
   void loadPendingWaybills() {
@@ -34,12 +40,40 @@ class _DriverDashboardState extends State<DriverDashboard> {
     });
   }
 
+  Future<void> loadPendingWaybillsFromFirestore() async {
+    if (shouldUseFirestoreData) {
+      try {
+        final allWaybills = await FirestoreWaybillService.getAllWaybills();
+        await WaybillService.replaceCachedWaybills(allWaybills);
+      } catch (_) {
+        // Keep using the local cache when Firestore is unavailable.
+      }
+    }
+
+    if (!mounted) return;
+
+    loadPendingWaybills();
+  }
+
   Future<void> refreshDashboard() async {
     if (isSyncing) return;
+
+    if (!shouldUseFirestoreData) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Online sync is disabled on Windows desktop. Please use Chrome or Android for Firebase sync.',
+          ),
+        ),
+      );
+      loadPendingWaybills();
+      return;
+    }
 
     setState(() => isSyncing = true);
 
     final syncedCount = await DeliverySyncService.syncPendingDeliveries();
+    await loadPendingWaybillsFromFirestore();
 
     if (!mounted) return;
 
@@ -58,7 +92,11 @@ class _DriverDashboardState extends State<DriverDashboard> {
     }
   }
 
-  void _logout(BuildContext context) {
+  Future<void> _logout(BuildContext context) async {
+    await FirebaseAuthService.signOut();
+
+    if (!context.mounted) return;
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const LoginScreen()),

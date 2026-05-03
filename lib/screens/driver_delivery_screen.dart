@@ -7,6 +7,8 @@ import 'dart:typed_data';
 import 'signature_capture_screen.dart';
 
 import '../services/cloudinary_service.dart';
+import '../services/firestore_waybill_service.dart';
+import '../utils/platform_flags.dart';
 
 class DriverDeliveryScreen extends StatefulWidget {
   final WaybillModel waybill;
@@ -215,6 +217,13 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
       );
 
       await WaybillService.updateWaybill(widget.index, updatedWaybill);
+      if (uploadedOnline && shouldUseFirestoreData) {
+        try {
+          await FirestoreWaybillService.updateWaybill(updatedWaybill);
+        } catch (_) {
+          // Local delivery remains saved; sync can be retried later.
+        }
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

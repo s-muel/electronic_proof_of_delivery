@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/waybill_model.dart';
 import '../services/delivery_sync_service.dart';
+import '../services/firebase_auth_service.dart';
+import '../services/firestore_waybill_service.dart';
 import '../services/waybill_service.dart';
+import '../utils/platform_flags.dart';
 import '../widgets/network_status_bar.dart';
 import 'login_screen.dart';
 import 'waybill_details_screen.dart';
@@ -22,10 +25,29 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
   @override
   void initState() {
     super.initState();
-    loadWaybills();
+    if (shouldSkipAutomaticFirebaseRefresh) {
+      setState(() {
+        pendingWaybills = WaybillService.getPendingWaybills();
+        deliveredWaybills = WaybillService.getDeliveredWaybills();
+        invoicedWaybills = WaybillService.getInvoicedWaybills();
+      });
+    } else {
+      loadWaybills();
+    }
   }
 
-  void loadWaybills() {
+  Future<void> loadWaybills() async {
+    if (shouldUseFirestoreData) {
+      try {
+        final allWaybills = await FirestoreWaybillService.getAllWaybills();
+        await WaybillService.replaceCachedWaybills(allWaybills);
+      } catch (_) {
+        // Keep using local cached data when Firestore is unavailable.
+      }
+    }
+
+    if (!mounted) return;
+
     setState(() {
       pendingWaybills = WaybillService.getPendingWaybills();
       deliveredWaybills = WaybillService.getDeliveredWaybills();
@@ -36,6 +58,17 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
   Future<void> syncNow() async {
     if (isSyncing) return;
 
+    if (!shouldUseFirestoreData) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Online sync is disabled on Windows desktop. Please use Chrome or Android for Firebase sync.',
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() => isSyncing = true);
 
     final syncedCount = await DeliverySyncService.syncPendingDeliveries();
@@ -43,7 +76,7 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
     if (!mounted) return;
 
     setState(() => isSyncing = false);
-    loadWaybills();
+    await loadWaybills();
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -56,7 +89,11 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
     );
   }
 
-  void _logout(BuildContext context) {
+  Future<void> _logout(BuildContext context) async {
+    await FirebaseAuthService.signOut();
+
+    if (!context.mounted) return;
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -79,7 +116,7 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
       ),
     );
 
-    loadWaybills();
+    await loadWaybills();
   }
 
   @override
@@ -91,7 +128,7 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
         title: const Text('Accounts Dashboard'),
         actions: [
           IconButton(
-            onPressed: loadWaybills,
+            onPressed: () => loadWaybills(),
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh Dashboard',
           ),
@@ -104,7 +141,7 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          loadWaybills();
+          await loadWaybills();
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -337,6 +374,13 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
     );
 
     await WaybillService.updateWaybill(index, updatedWaybill);
+    if (shouldUseFirestoreData) {
+      try {
+        await FirestoreWaybillService.updateWaybill(updatedWaybill);
+      } catch (_) {
+        // Keep the local invoiced update if Firestore is temporarily unavailable.
+      }
+    }
 
     ScaffoldMessenger.of(
       context,
@@ -513,65 +557,72 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
 
   Widget _buildTableView() {
     return SingleChildScrollView(
-      child: DataTable(
-        headingRowColor: WidgetStateProperty.all(
-          Colors.blue.withValues(alpha: 0.08),
-        ),
-        columns: const [
-          DataColumn(label: Text('Waybill No.')),
-          DataColumn(label: Text('BAJ No.')),
-          DataColumn(label: Text('Date')),
-          DataColumn(label: Text('Shipping/Vendor')),
-          DataColumn(label: Text('Delivered At')),
-          DataColumn(label: Text('Status')),
-          DataColumn(label: Text('Actions')),
-        ],
-        rows: filteredWaybills.map((waybill) {
-          final originalIndex = WaybillService.getIndexByWaybillNumber(
-            waybill.waybillNumber,
-          );
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          columnSpacing: 28,
+          headingRowColor: WidgetStateProperty.all(
+            Colors.blue.withValues(alpha: 0.08),
+          ),
+          columns: const [
+            DataColumn(label: Text('Waybill No.')),
+            DataColumn(label: Text('BAJ No.')),
+            DataColumn(label: Text('Date')),
+            DataColumn(label: Text('Shipping/Vendor')),
+            DataColumn(label: Text('Delivered At')),
+            DataColumn(label: Text('Status')),
+            DataColumn(label: Text('Actions')),
+          ],
+          rows: filteredWaybills.map((waybill) {
+            final originalIndex = WaybillService.getIndexByWaybillNumber(
+              waybill.waybillNumber,
+            );
 
-          return DataRow(
-            cells: [
-              DataCell(Text(waybill.waybillNumber)),
-              DataCell(Text(waybill.bajNumber)),
-              DataCell(Text(waybill.date)),
-              DataCell(Text(waybill.shippingVendor)),
-              DataCell(Text(_formatDateTime(waybill.deliveredAt))),
-              DataCell(
-                Chip(
-                  label: Text(waybill.status),
-                  backgroundColor: getStatusColor(
-                    waybill.status,
-                  ).withValues(alpha: 0.15),
-                  labelStyle: TextStyle(
-                    color: getStatusColor(waybill.status),
-                    fontWeight: FontWeight.bold,
+            return DataRow(
+              cells: [
+                DataCell(Text(waybill.waybillNumber)),
+                DataCell(Text(waybill.bajNumber)),
+                DataCell(Text(waybill.date)),
+                DataCell(Text(waybill.shippingVendor)),
+                DataCell(Text(_formatDateTime(waybill.deliveredAt))),
+                DataCell(
+                  Chip(
+                    label: Text(waybill.status),
+                    backgroundColor: getStatusColor(
+                      waybill.status,
+                    ).withValues(alpha: 0.15),
+                    labelStyle: TextStyle(
+                      color: getStatusColor(waybill.status),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
-              DataCell(
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: () =>
-                          openWaybillDetails(originalIndex, waybill),
-                      child: const Text('View'),
+                DataCell(
+                  SizedBox(
+                    width: widget.showMarkInvoicedButton ? 210 : 90,
+                    child: Row(
+                      children: [
+                        TextButton(
+                          onPressed: () =>
+                              openWaybillDetails(originalIndex, waybill),
+                          child: const Text('View'),
+                        ),
+                        if (widget.showMarkInvoicedButton &&
+                            waybill.status == 'Delivered')
+                          TextButton.icon(
+                            onPressed: () =>
+                                confirmMarkAsInvoiced(originalIndex, waybill),
+                            icon: const Icon(Icons.done_all, size: 16),
+                            label: const Text('Mark Invoiced'),
+                          ),
+                      ],
                     ),
-                    if (widget.showMarkInvoicedButton &&
-                        waybill.status == 'Delivered')
-                      TextButton.icon(
-                        onPressed: () =>
-                            confirmMarkAsInvoiced(originalIndex, waybill),
-                        icon: const Icon(Icons.done_all, size: 16),
-                        label: const Text('Mark Invoiced'),
-                      ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
-          );
-        }).toList(),
+              ],
+            );
+          }).toList(),
+        ),
       ),
     );
   }

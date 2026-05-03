@@ -1,6 +1,8 @@
 import '../models/waybill_model.dart';
 import 'cloudinary_service.dart';
+import 'firestore_waybill_service.dart';
 import 'waybill_service.dart';
+import '../utils/platform_flags.dart';
 
 class DeliverySyncService {
   static Future<int> syncPendingDeliveries() async {
@@ -18,6 +20,9 @@ class DeliverySyncService {
 
       if (syncedWaybill != null) {
         await WaybillService.updateWaybill(index, syncedWaybill);
+        if (shouldUseFirestoreData) {
+          await FirestoreWaybillService.updateWaybill(syncedWaybill);
+        }
         syncedCount++;
       }
     }

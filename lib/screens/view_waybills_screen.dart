@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/waybill_model.dart';
+import '../services/firestore_waybill_service.dart';
 import '../services/waybill_service.dart';
 
 import 'edit_waybill_screen.dart';
@@ -49,9 +50,19 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
     });
   }
 
-  void loadWaybills() {
-    allWaybills = WaybillService.getAllWaybills();
-    filteredWaybills = allWaybills;
+  Future<void> loadWaybills() async {
+    try {
+      allWaybills = await FirestoreWaybillService.getAllWaybills();
+      await WaybillService.replaceCachedWaybills(allWaybills);
+    } catch (_) {
+      allWaybills = WaybillService.getAllWaybills();
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      filteredWaybills = allWaybills;
+    });
   }
 
   void filterWaybills(String query) {

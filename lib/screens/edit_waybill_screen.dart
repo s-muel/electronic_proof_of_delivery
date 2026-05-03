@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/waybill_model.dart';
+import '../services/firestore_waybill_service.dart';
 import '../services/waybill_service.dart';
+import '../utils/platform_flags.dart';
 
 class EditWaybillScreen extends StatefulWidget {
   final WaybillModel waybill;
@@ -76,9 +78,10 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
     super.dispose();
   }
 
-Future<void> updateWaybill() async {
+  Future<void> updateWaybill() async {
     if (_formKey.currentState!.validate()) {
-      final updatedWaybill = WaybillModel(
+      final now = DateTime.now().toIso8601String();
+      final updatedWaybill = widget.waybill.copyWith(
         bajNumber: bajNumberController.text.trim(),
         waybillNumber: waybillNumberController.text.trim(),
         date: dateController.text.trim(),
@@ -94,17 +97,27 @@ Future<void> updateWaybill() async {
         hazardousCargoType: hazardousCargoTypeController.text.trim(),
         unNumber: unNumberController.text.trim(),
         tremcard: tremcardController.text.trim(),
-
-        // Keep existing system fields
-        status: widget.waybill.status,
-        receiverName: widget.waybill.receiverName,
-        receiverSignatureUrl: widget.waybill.receiverSignatureUrl,
-        createdAt: widget.waybill.createdAt,
-        deliveredAt: widget.waybill.deliveredAt,
-        invoicedAt: widget.waybill.invoicedAt,
+        updatedAt: now,
       );
 
       await WaybillService.updateWaybill(widget.index, updatedWaybill);
+      if (shouldUseFirestoreData) {
+        try {
+          await FirestoreWaybillService.updateWaybill(updatedWaybill);
+        } catch (_) {
+          if (!mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Waybill updated locally. It will need internet to sync online.',
+              ),
+            ),
+          );
+          Navigator.pop(context, true);
+          return;
+        }
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Waybill updated successfully')),

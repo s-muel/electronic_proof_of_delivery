@@ -33,6 +33,14 @@ class WaybillService {
     await _box.add(waybill.toMap());
   }
 
+  static Future<void> replaceCachedWaybills(List<WaybillModel> waybills) async {
+    await _box.clear();
+
+    for (final waybill in waybills) {
+      await _box.add(waybill.toMap());
+    }
+  }
+
   static String generateNextWaybillNumber() {
     const prefix = 'BAJ/WB-';
     final waybillPattern = RegExp(r'^BAJ/WB-(\d+)$');

@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -16,14 +17,15 @@ class PdfService {
 
     pw.MemoryImage? logoImage;
 
-    final pw.MemoryImage? receiverSignatureImage =
-        receiverSignatureBytes != null
-        ? pw.MemoryImage(receiverSignatureBytes)
-        : null;
+    final pw.MemoryImage? receiverSignatureImage = await _loadSignatureImage(
+      localBytes: receiverSignatureBytes,
+      imageUrl: waybill.receiverSignatureUrl,
+    );
 
-    final pw.MemoryImage? driverSignatureImage = driverSignatureBytes != null
-        ? pw.MemoryImage(driverSignatureBytes)
-        : null;
+    final pw.MemoryImage? driverSignatureImage = await _loadSignatureImage(
+      localBytes: driverSignatureBytes,
+      imageUrl: waybill.driverSignatureUrl,
+    );
 
     try {
       final logoBytes = await rootBundle.load('assets/images/baj_logo.png');
@@ -65,6 +67,33 @@ class PdfService {
     );
 
     return pdf.save();
+  }
+
+  static Future<pw.MemoryImage?> _loadSignatureImage({
+    Uint8List? localBytes,
+    required String imageUrl,
+  }) async {
+    if (localBytes != null) {
+      return pw.MemoryImage(localBytes);
+    }
+
+    if (imageUrl.trim().isEmpty) {
+      return null;
+    }
+
+    try {
+      final response = await http
+          .get(Uri.parse(imageUrl))
+          .timeout(const Duration(seconds: 12));
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return pw.MemoryImage(response.bodyBytes);
+      }
+    } catch (_) {
+      return null;
+    }
+
+    return null;
   }
 
   static pw.Widget _buildHeader(
