@@ -24,10 +24,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
   bool isSyncing = false;
 
   List<WaybillModel> get visibleWaybills {
-    return [
-      ...pendingSyncWaybills,
-      ...pendingWaybills,
-    ];
+    return [...pendingSyncWaybills, ...pendingWaybills];
   }
 
   @override
@@ -69,7 +66,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Online sync is disabled on Windows desktop. Please use Chrome or Android for Firebase sync.',
+            'Online sync is disabled on Windows desktop. Please use Chrome or Android for DataBase sync.',
           ),
         ),
       );
@@ -92,9 +89,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
 
     if (syncedCount > 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$syncedCount offline delivery sync completed'),
-        ),
+        SnackBar(content: Text('$syncedCount offline delivery sync completed')),
       );
     }
   }
@@ -113,9 +108,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
   void openWaybillDetails(int index, WaybillModel waybill) async {
     if (index == -1) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not find this waybill record'),
-        ),
+        const SnackBar(content: Text('Could not find this waybill record')),
       );
       return;
     }
@@ -123,10 +116,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => DriverDeliveryScreen(
-          waybill: waybill,
-          index: index,
-        ),
+        builder: (_) => DriverDeliveryScreen(waybill: waybill, index: index),
       ),
     );
 
@@ -154,48 +144,94 @@ class _DriverDashboardState extends State<DriverDashboard> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Driver Dashboard'),
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [Text('Driver Dashboard')],
+        ),
         actions: [
-          IconButton(
-            onPressed: isSyncing ? null : refreshDashboard,
-            icon: isSyncing
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh),
-          ),
+          NetworkStatusChip(onSyncNow: refreshDashboard, isSyncing: isSyncing),
+          SizedBox(width: 8),
           IconButton(
             onPressed: () => _logout(context),
             icon: const Icon(Icons.logout),
           ),
         ],
       ),
-      body: visibleWaybills.isEmpty
-          ? const Center(
-              child: Text(
-                'No pending delivery waybills available',
-                style: TextStyle(fontSize: 18),
-              ),
-            )
-          : Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  NetworkStatusBar(
-                    onSyncNow: refreshDashboard,
-                    isSyncing: isSyncing,
-                  ),
-                  const SizedBox(height: 12),
-                  if (pendingSyncWaybills.isNotEmpty) _buildPendingSyncBanner(),
-                  Expanded(
-                    child: isWideScreen ? _buildTableView() : _buildListView(),
-                  ),
-                ],
-              ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildSummaryCards(isWideScreen: isWideScreen),
+            const SizedBox(height: 12),
+            if (pendingSyncWaybills.isNotEmpty) _buildPendingSyncBanner(),
+            Expanded(
+              child: visibleWaybills.isEmpty
+                  ? _buildEmptyTableMessage()
+                  : isWideScreen
+                  ? _buildTableView()
+                  : _buildListView(),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryCards({required bool isWideScreen}) {
+    final cards = [
+      _DriverSummaryCard(
+        title: 'Pending Delivery',
+        count: pendingWaybills.length,
+        icon: Icons.pending_actions,
+        color: Colors.orange,
+      ),
+      _DriverSummaryCard(
+        title: 'Pending Sync',
+        count: pendingSyncWaybills.length,
+        icon: Icons.cloud_sync,
+        color: Colors.deepOrange,
+      ),
+    ];
+
+    if (isWideScreen) {
+      return Row(
+        children: [
+          Expanded(child: cards[0]),
+          const SizedBox(width: 12),
+          Expanded(child: cards[1]),
+        ],
+      );
+    }
+
+    return Column(children: [cards[0], const SizedBox(height: 10), cards[1]]);
+  }
+
+  Widget _buildEmptyTableMessage() {
+    return Card(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.inbox_outlined, size: 52, color: Colors.grey),
+              SizedBox(height: 12),
+              Text(
+                'No pending delivery waybills available',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 6),
+              Text(
+                'New assigned deliveries will appear here.',
+                style: TextStyle(color: Colors.black54),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -305,6 +341,77 @@ class _DriverDashboardState extends State<DriverDashboard> {
             ],
           );
         }).toList(),
+      ),
+    );
+  }
+}
+
+class _DriverSummaryCard extends StatelessWidget {
+  final String title;
+  final int count;
+  final IconData icon;
+  final Color color;
+
+  const _DriverSummaryCard({
+    required this.title,
+    required this.count,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 1.5,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    count.toString(),
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      height: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    title,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
