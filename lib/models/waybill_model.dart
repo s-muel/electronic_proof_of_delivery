@@ -24,6 +24,7 @@ class WaybillModel {
   final bool isParkingUnsuitable;
   final bool isPartOrder;
   final bool isCompleteOrder;
+  final String deliveryRemarks;
 
   final String status;
   final String syncStatus;
@@ -62,6 +63,7 @@ class WaybillModel {
     this.isParkingUnsuitable = false,
     this.isPartOrder = false,
     this.isCompleteOrder = false,
+    this.deliveryRemarks = '',
     this.status = 'Pending Delivery',
     this.syncStatus = 'Synced',
     this.receiverName = '',
@@ -99,6 +101,7 @@ class WaybillModel {
       'isParkingUnsuitable': isParkingUnsuitable,
       'isPartOrder': isPartOrder,
       'isCompleteOrder': isCompleteOrder,
+      'deliveryRemarks': deliveryRemarks,
       'status': status,
       'syncStatus': syncStatus,
       'receiverName': receiverName,
@@ -140,6 +143,7 @@ class WaybillModel {
       'isParkingUnsuitable': isParkingUnsuitable,
       'isPartOrder': isPartOrder,
       'isCompleteOrder': isCompleteOrder,
+      'deliveryRemarks': deliveryRemarks,
       'receiverSignatureUrl': receiverSignatureUrl,
       'driverSignatureUrl': driverSignatureUrl,
       'createdAt': createdAt,
@@ -173,6 +177,7 @@ class WaybillModel {
       isParkingUnsuitable: map['isParkingUnsuitable'] ?? false,
       isPartOrder: map['isPartOrder'] ?? false,
       isCompleteOrder: map['isCompleteOrder'] ?? false,
+      deliveryRemarks: map['deliveryRemarks'] ?? '',
       status: map['status'] ?? 'Pending Delivery',
       syncStatus: map['syncStatus'] ?? 'Synced',
       receiverName: map['receiverName'] ?? '',
@@ -213,6 +218,7 @@ class WaybillModel {
     bool? isParkingUnsuitable,
     bool? isPartOrder,
     bool? isCompleteOrder,
+    String? deliveryRemarks,
     String? status,
     String? syncStatus,
     String? receiverName,
@@ -248,6 +254,7 @@ class WaybillModel {
       isParkingUnsuitable: isParkingUnsuitable ?? this.isParkingUnsuitable,
       isPartOrder: isPartOrder ?? this.isPartOrder,
       isCompleteOrder: isCompleteOrder ?? this.isCompleteOrder,
+      deliveryRemarks: deliveryRemarks ?? this.deliveryRemarks,
       status: status ?? this.status,
       syncStatus: syncStatus ?? this.syncStatus,
       receiverName: receiverName ?? this.receiverName,

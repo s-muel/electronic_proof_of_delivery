@@ -320,7 +320,7 @@ class PdfService {
 
   static pw.Widget _buildConditionSection(WaybillModel waybill) {
     return pw.Container(
-      height: 58,
+      height: 74,
       padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: const pw.BoxDecoration(
         border: pw.Border(bottom: pw.BorderSide(color: PdfColors.black)),
@@ -349,6 +349,34 @@ class PdfService {
               _checkItem('PART ORDER', waybill.isPartOrder),
               _checkItem('COMPLETE ORDER', waybill.isCompleteOrder),
             ],
+          ),
+          pw.SizedBox(height: 6),
+          pw.Expanded(
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  'REMARKS:',
+                  style: pw.TextStyle(
+                    fontSize: 8,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(width: 5),
+                pw.Expanded(
+                  child: pw.Text(
+                    waybill.deliveryRemarks.isEmpty
+                        ? '-'
+                        : waybill.deliveryRemarks,
+                    style: pw.TextStyle(
+                      fontSize: 8,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                    maxLines: 2,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
