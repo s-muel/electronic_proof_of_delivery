@@ -32,6 +32,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
 
   final receiverNameController = TextEditingController();
   final driverNameController = TextEditingController();
+  final remarksController = TextEditingController();
 
   bool isOk = false;
   bool isShort = false;
@@ -53,6 +54,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
 
     receiverNameController.text = widget.waybill.receiverName;
     driverNameController.text = widget.waybill.driverName;
+    remarksController.text = widget.waybill.deliveryRemarks;
 
     isOk = widget.waybill.isOk;
     isShort = widget.waybill.isShort;
@@ -77,6 +79,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
   void dispose() {
     receiverNameController.dispose();
     driverNameController.dispose();
+    remarksController.dispose();
     super.dispose();
   }
 
@@ -135,6 +138,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
     return currentWaybill.copyWith(
       receiverName: receiverNameController.text.trim(),
       driverName: driverNameController.text.trim(),
+      deliveryRemarks: remarksController.text.trim(),
       isOk: isOk,
       isShort: isShort,
       isOver: isOver,
@@ -204,6 +208,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
       final updatedWaybill = currentWaybill.copyWith(
         receiverName: receiverNameController.text.trim(),
         driverName: driverNameController.text.trim(),
+        deliveryRemarks: remarksController.text.trim(),
         isOk: isOk,
         isShort: isShort,
         isOver: isOver,
@@ -349,6 +354,10 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
 
                           const SizedBox(height: 20),
 
+                          _buildRemarksField(),
+
+                          const SizedBox(height: 20),
+
                           isWideScreen
                               ? Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -472,6 +481,20 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
         }
         return null;
       },
+    );
+  }
+
+  Widget _buildRemarksField() {
+    return TextFormField(
+      controller: remarksController,
+      decoration: const InputDecoration(
+        labelText: 'Remarks',
+        border: OutlineInputBorder(),
+        prefixIcon: Icon(Icons.notes),
+      ),
+      minLines: 2,
+      maxLines: 4,
+      onChanged: (_) => setState(() {}),
     );
   }
 

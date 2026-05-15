@@ -43,7 +43,7 @@ class WaybillTemplateWidget extends StatelessWidget {
 
   Widget _buildConditionSection() {
     return Container(
-      height: 75,
+      height: 105,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: const BoxDecoration(
         border: Border(
@@ -74,6 +74,32 @@ class WaybillTemplateWidget extends StatelessWidget {
               _checkItem('PART\nORDER', waybill.isPartOrder),
               _checkItem('COMPLETE\nORDER', waybill.isCompleteOrder),
             ],
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'REMARKS:',
+                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    waybill.deliveryRemarks.isEmpty
+                        ? '-'
+                        : waybill.deliveryRemarks,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
