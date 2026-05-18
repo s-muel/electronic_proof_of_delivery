@@ -23,6 +23,7 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
   List<WaybillModel> deliveredWaybills = [];
   List<WaybillModel> invoicedWaybills = [];
   bool isSyncing = false;
+  String accountName = '';
 
   @override
   void initState() {
@@ -39,6 +40,17 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
   }
 
   Future<void> loadWaybills() async {
+    final firebaseUser = FirebaseAuthService.currentFirebaseUser;
+    var loadedAccountName =
+        firebaseUser?.displayName ?? firebaseUser?.email ?? '';
+
+    try {
+      final profile = await FirebaseAuthService.getCurrentUserProfile();
+      loadedAccountName = profile?.fullName ?? loadedAccountName;
+    } catch (_) {
+      // Use Firebase Auth display data if the profile cannot be refreshed.
+    }
+
     if (shouldUseFirestoreData) {
       try {
         final allWaybills = await FirestoreWaybillService.getAllWaybills();
@@ -56,6 +68,7 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
     if (!mounted) return;
 
     setState(() {
+      accountName = loadedAccountName;
       pendingWaybills = WaybillService.getPendingWaybills();
       deliveredWaybills = WaybillService.getDeliveredWaybills();
       invoicedWaybills = WaybillService.getInvoicedWaybills();
@@ -211,10 +224,10 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
                           ),
                         ),
                         const SizedBox(width: 16),
-                        const Column(
+                        Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            const Text(
                               'Accounts Control Center',
                               style: TextStyle(
                                 color: Colors.white,
@@ -222,8 +235,19 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            SizedBox(height: 5),
-                            Text(
+                            const SizedBox(height: 5),
+                            if (accountName.trim().isNotEmpty) ...[
+                              Text(
+                                'Welcome, $accountName',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                            ],
+                            const Text(
                               'Track delivered waybills, invoices, and sync status.',
                               style: TextStyle(color: Color(0xFFEAF3FF)),
                             ),
