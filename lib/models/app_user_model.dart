@@ -40,4 +40,24 @@ class AppUserModel {
       'updatedAt': updatedAt,
     };
   }
+
+  AppUserModel copyWith({
+    String? userId,
+    String? fullName,
+    String? email,
+    String? role,
+    bool? isActive,
+    String? createdAt,
+    String? updatedAt,
+  }) {
+    return AppUserModel(
+      userId: userId ?? this.userId,
+      fullName: fullName ?? this.fullName,
+      email: email ?? this.email,
+      role: role ?? this.role,
+      isActive: isActive ?? this.isActive,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
 }

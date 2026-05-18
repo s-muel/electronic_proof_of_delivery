@@ -231,6 +231,13 @@ class PdfService {
           child: _box(label: 'P.O. NO.', value: waybill.poNumber, height: 42),
         ),
         pw.Expanded(
+          child: _box(
+            label: 'SEAL NO.',
+            value: waybill.sealNumber,
+            height: 42,
+          ),
+        ),
+        pw.Expanded(
           child: _box(label: 'STATUS', value: waybill.status, height: 42),
         ),
       ],

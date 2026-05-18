@@ -15,18 +15,24 @@ class WaybillService {
   }
 
   static int getIndexByWaybillNumber(String waybillNumber) {
-    final allWaybills = getAllWaybills();
+    final allWaybills = getAllWaybills(includeDeleted: true);
 
     return allWaybills.indexWhere(
       (waybill) => waybill.waybillNumber == waybillNumber,
     );
   }
 
-  static List<WaybillModel> getAllWaybills() {
-    return _box.values.map((item) {
+  static List<WaybillModel> getAllWaybills({bool includeDeleted = false}) {
+    final waybills = _box.values.map((item) {
       final map = Map<String, dynamic>.from(item as Map);
       return WaybillModel.fromMap(map);
     }).toList();
+
+    if (includeDeleted) {
+      return waybills;
+    }
+
+    return waybills.where((waybill) => !waybill.isDeleted).toList();
   }
 
   static Future<void> addWaybill(WaybillModel waybill) async {
@@ -63,7 +69,7 @@ class WaybillService {
     final waybillPattern = RegExp(r'^BAJ/WB-(\d+)$');
     var highestNumber = 0;
 
-    for (final waybill in getAllWaybills()) {
+    for (final waybill in getAllWaybills(includeDeleted: true)) {
       final match = waybillPattern.firstMatch(waybill.waybillNumber.trim());
 
       if (match == null) {
@@ -130,6 +136,59 @@ class WaybillService {
     if (index >= 0 && index < _box.length) {
       await _box.deleteAt(index);
     }
+  }
+
+  static Future<void> softDeleteWaybillByNumber({
+    required String waybillNumber,
+    required String deletedBy,
+  }) async {
+    final index = getIndexByWaybillNumber(waybillNumber);
+
+    if (index < 0 || index >= _box.length) {
+      return;
+    }
+
+    final current = WaybillModel.fromMap(
+      Map<String, dynamic>.from(_box.getAt(index) as Map),
+    );
+    final now = DateTime.now().toIso8601String();
+
+    await _box.putAt(
+      index,
+      current
+          .copyWith(
+            isDeleted: true,
+            deletedAt: now,
+            deletedBy: deletedBy,
+            updatedAt: now,
+          )
+          .toMap(),
+    );
+  }
+
+  static Future<void> restoreWaybillByNumber(String waybillNumber) async {
+    final index = getIndexByWaybillNumber(waybillNumber);
+
+    if (index < 0 || index >= _box.length) {
+      return;
+    }
+
+    final current = WaybillModel.fromMap(
+      Map<String, dynamic>.from(_box.getAt(index) as Map),
+    );
+    final now = DateTime.now().toIso8601String();
+
+    await _box.putAt(
+      index,
+      current
+          .copyWith(
+            isDeleted: false,
+            deletedAt: '',
+            deletedBy: '',
+            updatedAt: now,
+          )
+          .toMap(),
+    );
   }
 
   static Future<void> clearAllWaybills() async {
