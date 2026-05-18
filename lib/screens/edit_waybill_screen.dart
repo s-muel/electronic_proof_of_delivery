@@ -25,6 +25,7 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
   final waybillNumberController = TextEditingController();
   final dateController = TextEditingController();
   final poNumberController = TextEditingController();
+  final sealNumberController = TextEditingController();
   final shippingVendorController = TextEditingController();
   final consigneeReceiverController = TextEditingController();
   final deliveryAddressController = TextEditingController();
@@ -45,6 +46,7 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
     waybillNumberController.text = widget.waybill.waybillNumber;
     dateController.text = widget.waybill.date;
     poNumberController.text = widget.waybill.poNumber;
+    sealNumberController.text = widget.waybill.sealNumber;
     shippingVendorController.text = widget.waybill.shippingVendor;
     consigneeReceiverController.text = widget.waybill.consigneeReceiver;
     deliveryAddressController.text = widget.waybill.deliveryAddress;
@@ -64,6 +66,7 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
     waybillNumberController.dispose();
     dateController.dispose();
     poNumberController.dispose();
+    sealNumberController.dispose();
     shippingVendorController.dispose();
     consigneeReceiverController.dispose();
     deliveryAddressController.dispose();
@@ -86,6 +89,7 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
         waybillNumber: waybillNumberController.text.trim(),
         date: dateController.text.trim(),
         poNumber: poNumberController.text.trim(),
+        sealNumber: sealNumberController.text.trim(),
         shippingVendor: shippingVendorController.text.trim(),
         consigneeReceiver: consigneeReceiverController.text.trim(),
         deliveryAddress: deliveryAddressController.text.trim(),
@@ -399,6 +403,15 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
                           controller: poNumberController,
                           requiredField: false,
                           icon: Icons.assignment,
+                        ),
+                      ),
+                      _fieldBox(
+                        isWideScreen: isWideScreen,
+                        child: buildTextField(
+                          label: 'Seal Number',
+                          controller: sealNumberController,
+                          requiredField: false,
+                          icon: Icons.verified_user,
                         ),
                       ),
                     ],

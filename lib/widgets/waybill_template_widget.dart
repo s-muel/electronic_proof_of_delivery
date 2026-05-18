@@ -248,6 +248,13 @@ class WaybillTemplateWidget extends StatelessWidget {
           child: _box(label: 'P.O. NO.', value: waybill.poNumber, height: 58),
         ),
         Expanded(
+          child: _box(
+            label: 'SEAL NO.',
+            value: waybill.sealNumber,
+            height: 58,
+          ),
+        ),
+        Expanded(
           child: _box(label: 'STATUS', value: waybill.status, height: 58),
         ),
       ],
