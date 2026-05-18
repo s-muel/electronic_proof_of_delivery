@@ -48,12 +48,20 @@ class FirestoreWaybillService {
         .set(waybill.toFirestoreMap(), SetOptions(merge: true));
   }
 
-  static Future<List<WaybillModel>> getAllWaybills() async {
+  static Future<List<WaybillModel>> getAllWaybills({
+    bool includeDeleted = false,
+  }) async {
     final snapshot = await _waybills.orderBy('createdAt', descending: true).get();
 
-    return snapshot.docs
+    final waybills = snapshot.docs
         .map((doc) => WaybillModel.fromMap(doc.data()))
         .toList();
+
+    if (includeDeleted) {
+      return waybills;
+    }
+
+    return waybills.where((waybill) => !waybill.isDeleted).toList();
   }
 
   static Future<List<WaybillModel>> getWaybillsByStatus(String status) async {
@@ -63,7 +71,37 @@ class FirestoreWaybillService {
 
     return snapshot.docs
         .map((doc) => WaybillModel.fromMap(doc.data()))
+        .where((waybill) => !waybill.isDeleted)
         .toList();
+  }
+
+  static Future<void> softDeleteWaybill({
+    required WaybillModel waybill,
+    required String deletedBy,
+  }) async {
+    final now = DateTime.now().toIso8601String();
+
+    await updateWaybill(
+      waybill.copyWith(
+        isDeleted: true,
+        deletedAt: now,
+        deletedBy: deletedBy,
+        updatedAt: now,
+      ),
+    );
+  }
+
+  static Future<void> restoreWaybill(WaybillModel waybill) async {
+    final now = DateTime.now().toIso8601String();
+
+    await updateWaybill(
+      waybill.copyWith(
+        isDeleted: false,
+        deletedAt: '',
+        deletedBy: '',
+        updatedAt: now,
+      ),
+    );
   }
 
   static String _safeDocumentId(String waybillNumber) {

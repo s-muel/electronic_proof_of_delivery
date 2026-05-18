@@ -5,6 +5,7 @@ class WaybillModel {
   final String waybillNumber;
   final String date;
   final String poNumber;
+  final String sealNumber;
   final String shippingVendor;
   final String consigneeReceiver;
   final String deliveryAddress;
@@ -39,12 +40,16 @@ class WaybillModel {
   final String updatedAt;
   final String deliveredAt;
   final String invoicedAt;
+  final bool isDeleted;
+  final String deletedAt;
+  final String deletedBy;
 
   WaybillModel({
     required this.bajNumber,
     required this.waybillNumber,
     required this.date,
     required this.poNumber,
+    this.sealNumber = '',
     required this.shippingVendor,
     required this.consigneeReceiver,
     required this.deliveryAddress,
@@ -75,6 +80,9 @@ class WaybillModel {
     String? updatedAt,
     this.deliveredAt = '',
     this.invoicedAt = '',
+    this.isDeleted = false,
+    this.deletedAt = '',
+    this.deletedBy = '',
   }) : updatedAt = updatedAt ?? createdAt;
 
   Map<String, dynamic> toMap() {
@@ -83,6 +91,7 @@ class WaybillModel {
       'waybillNumber': waybillNumber,
       'date': date,
       'poNumber': poNumber,
+      'sealNumber': sealNumber,
       'shippingVendor': shippingVendor,
       'consigneeReceiver': consigneeReceiver,
       'deliveryAddress': deliveryAddress,
@@ -113,6 +122,9 @@ class WaybillModel {
       'updatedAt': updatedAt,
       'deliveredAt': deliveredAt,
       'invoicedAt': invoicedAt,
+      'isDeleted': isDeleted,
+      'deletedAt': deletedAt,
+      'deletedBy': deletedBy,
     };
   }
 
@@ -122,6 +134,7 @@ class WaybillModel {
       'waybillNumber': waybillNumber,
       'date': date,
       'poNumber': poNumber,
+      'sealNumber': sealNumber,
       'shippingVendor': shippingVendor,
       'consigneeReceiver': consigneeReceiver,
       'deliveryAddress': deliveryAddress,
@@ -150,6 +163,9 @@ class WaybillModel {
       'updatedAt': updatedAt,
       'deliveredAt': deliveredAt,
       'invoicedAt': invoicedAt,
+      'isDeleted': isDeleted,
+      'deletedAt': deletedAt,
+      'deletedBy': deletedBy,
     };
   }
 
@@ -159,6 +175,7 @@ class WaybillModel {
       waybillNumber: map['waybillNumber'] ?? '',
       date: map['date'] ?? '',
       poNumber: map['poNumber'] ?? '',
+      sealNumber: map['sealNumber'] ?? '',
       shippingVendor: map['shippingVendor'] ?? '',
       consigneeReceiver: map['consigneeReceiver'] ?? '',
       deliveryAddress: map['deliveryAddress'] ?? '',
@@ -192,6 +209,9 @@ class WaybillModel {
       updatedAt: map['updatedAt'],
       deliveredAt: map['deliveredAt'] ?? '',
       invoicedAt: map['invoicedAt'] ?? '',
+      isDeleted: map['isDeleted'] ?? false,
+      deletedAt: map['deletedAt'] ?? '',
+      deletedBy: map['deletedBy'] ?? '',
     );
   }
 
@@ -200,6 +220,7 @@ class WaybillModel {
     String? waybillNumber,
     String? date,
     String? poNumber,
+    String? sealNumber,
     String? shippingVendor,
     String? consigneeReceiver,
     String? deliveryAddress,
@@ -230,12 +251,16 @@ class WaybillModel {
     String? updatedAt,
     String? deliveredAt,
     String? invoicedAt,
+    bool? isDeleted,
+    String? deletedAt,
+    String? deletedBy,
   }) {
     return WaybillModel(
       bajNumber: bajNumber ?? this.bajNumber,
       waybillNumber: waybillNumber ?? this.waybillNumber,
       date: date ?? this.date,
       poNumber: poNumber ?? this.poNumber,
+      sealNumber: sealNumber ?? this.sealNumber,
       shippingVendor: shippingVendor ?? this.shippingVendor,
       consigneeReceiver: consigneeReceiver ?? this.consigneeReceiver,
       deliveryAddress: deliveryAddress ?? this.deliveryAddress,
@@ -267,6 +292,9 @@ class WaybillModel {
       updatedAt: updatedAt ?? this.updatedAt,
       deliveredAt: deliveredAt ?? this.deliveredAt,
       invoicedAt: invoicedAt ?? this.invoicedAt,
+      isDeleted: isDeleted ?? this.isDeleted,
+      deletedAt: deletedAt ?? this.deletedAt,
+      deletedBy: deletedBy ?? this.deletedBy,
     );
   }
 

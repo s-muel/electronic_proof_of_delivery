@@ -18,6 +18,7 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
   final waybillNumberController = TextEditingController();
   final dateController = TextEditingController();
   final poNumberController = TextEditingController();
+  final sealNumberController = TextEditingController();
   final shippingVendorController = TextEditingController();
   final consigneeReceiverController = TextEditingController();
   final deliveryAddressController = TextEditingController();
@@ -44,6 +45,7 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
     waybillNumberController.dispose();
     dateController.dispose();
     poNumberController.dispose();
+    sealNumberController.dispose();
     shippingVendorController.dispose();
     consigneeReceiverController.dispose();
     deliveryAddressController.dispose();
@@ -93,6 +95,7 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
         waybillNumber: waybillNumber,
         date: dateController.text.trim(),
         poNumber: poNumberController.text.trim(),
+        sealNumber: sealNumberController.text.trim(),
         shippingVendor: shippingVendorController.text.trim(),
         consigneeReceiver: consigneeReceiverController.text.trim(),
         deliveryAddress: deliveryAddressController.text.trim(),
@@ -391,6 +394,15 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
                           controller: poNumberController,
                           requiredField: false,
                           icon: Icons.assignment,
+                        ),
+                      ),
+                      _fieldBox(
+                        isWideScreen: isWideScreen,
+                        child: buildTextField(
+                          label: 'Seal Number',
+                          controller: sealNumberController,
+                          requiredField: false,
+                          icon: Icons.verified_user,
                         ),
                       ),
                     ],

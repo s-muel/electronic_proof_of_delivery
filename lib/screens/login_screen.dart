@@ -7,6 +7,7 @@ import '../services/firebase_auth_service.dart';
 import 'accounts_dashboard.dart';
 import 'driver_dashboard.dart';
 import 'officer_dashboard.dart';
+import 'super_user_dashboard.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -85,6 +86,8 @@ class _LoginScreenState extends State<LoginScreen> {
       dashboard = const DriverDashboard();
     } else if (role == 'accounts') {
       dashboard = const AccountsDashboard();
+    } else if (role == 'super_user' || role == 'super user' || role == 'admin') {
+      dashboard = const SuperUserDashboard();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Unsupported user role: ${appUser.role}')),
