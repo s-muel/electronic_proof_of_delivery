@@ -148,6 +148,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     final passwordController = TextEditingController();
     var selectedRole = 'officer';
     var isSaving = false;
+    var obscurePassword = true;
 
     final userCreated = await showDialog<bool>(
       context: context,
@@ -190,10 +191,22 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: passwordController,
-                          obscureText: true,
-                          decoration: const InputDecoration(
+                          obscureText: obscurePassword,
+                          decoration: InputDecoration(
                             labelText: 'Temporary Password',
-                            border: OutlineInputBorder(),
+                            border: const OutlineInputBorder(),
+                            suffixIcon: IconButton(
+                              onPressed: () {
+                                setDialogState(
+                                  () => obscurePassword = !obscurePassword,
+                                );
+                              },
+                              icon: Icon(
+                                obscurePassword
+                                    ? Icons.visibility
+                                    : Icons.visibility_off,
+                              ),
+                            ),
                           ),
                           validator: (value) {
                             if ((value ?? '').length < 6) {

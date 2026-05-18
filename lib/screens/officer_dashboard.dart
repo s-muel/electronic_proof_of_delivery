@@ -21,6 +21,7 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
   int deliveredCount = 0;
   int invoicedCount = 0;
   bool isSyncing = false;
+  String officerName = '';
 
   @override
   void initState() {
@@ -42,7 +43,16 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
 
   Future<void> loadDashboardCounts() async {
     final userId = FirebaseAuthService.currentFirebaseUser?.uid ?? '';
+    final firebaseUser = FirebaseAuthService.currentFirebaseUser;
     var officerWaybills = WaybillService.getWaybillsCreatedBy(userId);
+    var loadedOfficerName = firebaseUser?.displayName ?? firebaseUser?.email ?? '';
+
+    try {
+      final profile = await FirebaseAuthService.getCurrentUserProfile();
+      loadedOfficerName = profile?.fullName ?? loadedOfficerName;
+    } catch (_) {
+      // Use Firebase Auth display data if the profile cannot be refreshed.
+    }
 
     if (shouldUseFirestoreData) {
       try {
@@ -59,6 +69,7 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
     if (!mounted) return;
 
     setState(() {
+      officerName = loadedOfficerName;
       pendingCount = officerWaybills
           .where((waybill) => waybill.status == WaybillService.pendingDeliveryStatus)
           .length;
@@ -215,10 +226,10 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
                           ),
                         ),
                         const SizedBox(width: 16),
-                        const Column(
+                        Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            const Text(
                               'Officer Control Center',
                               style: TextStyle(
                                 color: Colors.white,
@@ -226,10 +237,21 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            SizedBox(height: 5),
+                            const SizedBox(height: 5),
+                            if (officerName.trim().isNotEmpty) ...[
+                              Text(
+                                'Welcome, $officerName',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                            ],
                             Text(
                               'Create, track, and manage BAJ waybills.',
-                              style: TextStyle(color: Color(0xFFEAF3FF)),
+                              style: const TextStyle(color: Color(0xFFEAF3FF)),
                             ),
                           ],
                         ),
