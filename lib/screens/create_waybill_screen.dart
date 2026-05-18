@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/waybill_model.dart';
+import '../services/firebase_auth_service.dart';
 import '../services/firestore_waybill_service.dart';
 import '../services/waybill_service.dart';
 import '../utils/platform_flags.dart';
@@ -13,6 +14,7 @@ class CreateWaybillScreen extends StatefulWidget {
 
 class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
   final _formKey = GlobalKey<FormState>();
+  bool isSaving = false;
 
   final bajNumberController = TextEditingController();
   final waybillNumberController = TextEditingController();
@@ -61,80 +63,99 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
   }
 
   Future<void> saveWaybill() async {
+    if (isSaving) return;
+
     if (_formKey.currentState!.validate()) {
+      setState(() => isSaving = true);
+
       var waybillNumber = waybillNumberController.text.trim();
 
-      if (shouldUseFirestoreData) {
-        try {
-          waybillNumber =
-              await FirestoreWaybillService.generateNextWaybillNumber();
-          waybillNumberController.text = waybillNumber;
-        } catch (_) {
-          waybillNumber = waybillNumberController.text.trim();
+      try {
+        if (shouldUseFirestoreData) {
+          try {
+            waybillNumber =
+                await FirestoreWaybillService.generateNextWaybillNumber();
+            waybillNumberController.text = waybillNumber;
+          } catch (_) {
+            waybillNumber = waybillNumberController.text.trim();
+          }
         }
-      }
 
-      if (WaybillService.getIndexByWaybillNumber(waybillNumber) != -1) {
-        waybillNumberController.text =
-            WaybillService.generateNextWaybillNumber();
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Waybill number already exists. New number assigned: ${waybillNumberController.text}',
-            ),
-          ),
-        );
-        return;
-      }
-
-      final now = DateTime.now().toIso8601String();
-
-      final waybill = WaybillModel(
-        bajNumber: bajNumberController.text.trim(),
-        waybillNumber: waybillNumber,
-        date: dateController.text.trim(),
-        poNumber: poNumberController.text.trim(),
-        sealNumber: sealNumberController.text.trim(),
-        shippingVendor: shippingVendorController.text.trim(),
-        consigneeReceiver: consigneeReceiverController.text.trim(),
-        deliveryAddress: deliveryAddressController.text.trim(),
-        cargoDescription: cargoDescriptionController.text.trim(),
-        grossWeight: grossWeightController.text.trim(),
-        vehicleNumber: vehicleNumberController.text.trim(),
-        driverName: driverNameController.text.trim(),
-        comments: commentsController.text.trim(),
-        createdAt: now,
-        updatedAt: now,
-        hazardousCargoType: hazardousCargoTypeController.text.trim(),
-        unNumber: unNumberController.text.trim(),
-        tremcard: tremcardController.text.trim(),
-      );
-
-      await WaybillService.addWaybill(waybill);
-      if (shouldUseFirestoreData) {
-        try {
-          await FirestoreWaybillService.createWaybill(waybill);
-        } catch (_) {
-          if (!mounted) return;
+        if (WaybillService.getIndexByWaybillNumber(waybillNumber) != -1) {
+          waybillNumberController.text =
+              WaybillService.generateNextWaybillNumber();
 
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text(
-                'Waybill saved locally. It will need internet to sync online.',
+                'Waybill number already exists. New number assigned: ${waybillNumberController.text}',
               ),
             ),
           );
-          Navigator.pop(context);
           return;
         }
+
+        final now = DateTime.now().toIso8601String();
+        final currentProfile = await FirebaseAuthService.getCurrentUserProfile();
+        final firebaseUser = FirebaseAuthService.currentFirebaseUser;
+        final creatorUserId = currentProfile?.userId ?? firebaseUser?.uid ?? '';
+        final creatorName =
+            currentProfile?.fullName ?? firebaseUser?.displayName ?? '';
+        final creatorEmail = currentProfile?.email ?? firebaseUser?.email ?? '';
+
+        final waybill = WaybillModel(
+          bajNumber: bajNumberController.text.trim(),
+          waybillNumber: waybillNumber,
+          date: dateController.text.trim(),
+          poNumber: poNumberController.text.trim(),
+          sealNumber: sealNumberController.text.trim(),
+          shippingVendor: shippingVendorController.text.trim(),
+          consigneeReceiver: consigneeReceiverController.text.trim(),
+          deliveryAddress: deliveryAddressController.text.trim(),
+          cargoDescription: cargoDescriptionController.text.trim(),
+          grossWeight: grossWeightController.text.trim(),
+          vehicleNumber: vehicleNumberController.text.trim(),
+          driverName: driverNameController.text.trim(),
+          comments: commentsController.text.trim(),
+          createdAt: now,
+          updatedAt: now,
+          hazardousCargoType: hazardousCargoTypeController.text.trim(),
+          unNumber: unNumberController.text.trim(),
+          tremcard: tremcardController.text.trim(),
+          createdByUserId: creatorUserId,
+          createdByName: creatorName,
+          createdByEmail: creatorEmail,
+        );
+
+        await WaybillService.addWaybill(waybill);
+        if (shouldUseFirestoreData) {
+          try {
+            await FirestoreWaybillService.createWaybill(waybill);
+          } catch (_) {
+            if (!mounted) return;
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Waybill saved locally. It will need internet to sync online.',
+                ),
+              ),
+            );
+            Navigator.pop(context);
+            return;
+          }
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Waybill created successfully')),
+        );
+
+        Navigator.pop(context);
+      } finally {
+        if (mounted) {
+          setState(() => isSaving = false);
+        }
       }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Waybill created successfully')),
-      );
-
-      Navigator.pop(context);
     }
   }
 
@@ -535,9 +556,15 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
                     width: isWideScreen ? 250 : double.infinity,
                     height: 48,
                     child: ElevatedButton.icon(
-                      onPressed: saveWaybill,
-                      icon: const Icon(Icons.save),
-                      label: const Text('Save Waybill'),
+                      onPressed: isSaving ? null : saveWaybill,
+                      icon: isSaving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save),
+                      label: Text(isSaving ? 'Saving...' : 'Save Waybill'),
                     ),
                   ),
                 ],

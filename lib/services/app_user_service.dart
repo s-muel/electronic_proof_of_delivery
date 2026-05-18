@@ -8,14 +8,33 @@ class AppUserService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static const String _collectionName = 'users';
+  static const String _secondaryAppName = 'admin-user-create';
+  static FirebaseApp? _secondaryApp;
 
   static CollectionReference<Map<String, dynamic>> get _users =>
       _firestore.collection(_collectionName);
 
-  static Future<List<AppUserModel>> getAllUsers() async {
-    final snapshot = await _users.orderBy('createdAt', descending: true).get();
+  static Future<FirebaseAuth> _getSecondaryAuth() async {
+    for (final app in Firebase.apps) {
+      if (app.name == _secondaryAppName) {
+        _secondaryApp = app;
+        return FirebaseAuth.instanceFor(app: app);
+      }
+    }
 
-    return snapshot.docs.map((doc) => AppUserModel.fromMap(doc.data())).toList();
+    _secondaryApp = await Firebase.initializeApp(
+      name: _secondaryAppName,
+      options: Firebase.app().options,
+    );
+
+    return FirebaseAuth.instanceFor(app: _secondaryApp!);
+  }
+
+  static Future<List<AppUserModel>> getAllUsers() async {
+    final snapshot = await _users.get();
+
+    return snapshot.docs.map((doc) => AppUserModel.fromMap(doc.data())).toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
   static Future<AppUserModel> createUser({
@@ -24,13 +43,9 @@ class AppUserService {
     required String password,
     required String role,
   }) async {
-    final secondaryApp = await Firebase.initializeApp(
-      name: 'admin-user-create-${DateTime.now().microsecondsSinceEpoch}',
-      options: Firebase.app().options,
-    );
+    final secondaryAuth = await _getSecondaryAuth();
 
     try {
-      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
       final credential = await secondaryAuth.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password,
@@ -57,11 +72,16 @@ class AppUserService {
         updatedAt: now,
       );
 
-      await _users.doc(user.uid).set(appUser.toMap());
+      try {
+        await _users.doc(user.uid).set(appUser.toMap());
+      } catch (_) {
+        await user.delete();
+        rethrow;
+      }
 
       return appUser;
     } finally {
-      await secondaryApp.delete();
+      await secondaryAuth.signOut();
     }
   }
 

@@ -35,6 +35,12 @@ class WaybillService {
     return waybills.where((waybill) => !waybill.isDeleted).toList();
   }
 
+  static List<WaybillModel> getWaybillsCreatedBy(String userId) {
+    return getAllWaybills()
+        .where((waybill) => waybill.createdByUserId == userId)
+        .toList();
+  }
+
   static Future<void> addWaybill(WaybillModel waybill) async {
     await _box.add(waybill.toMap());
   }
@@ -114,6 +120,12 @@ class WaybillService {
         .toList();
   }
 
+  static List<WaybillModel> getPendingWaybillsCreatedBy(String userId) {
+    return getWaybillsCreatedBy(userId)
+        .where((waybill) => waybill.status == pendingDeliveryStatus)
+        .toList();
+  }
+
   static List<WaybillModel> getPendingSyncWaybills() {
     return getAllWaybills()
         .where((waybill) => waybill.status == pendingSyncStatus)
@@ -126,8 +138,20 @@ class WaybillService {
         .toList();
   }
 
+  static List<WaybillModel> getDeliveredWaybillsCreatedBy(String userId) {
+    return getWaybillsCreatedBy(userId)
+        .where((waybill) => waybill.status == deliveredStatus)
+        .toList();
+  }
+
   static List<WaybillModel> getInvoicedWaybills() {
     return getAllWaybills()
+        .where((waybill) => waybill.status == invoicedStatus)
+        .toList();
+  }
+
+  static List<WaybillModel> getInvoicedWaybillsCreatedBy(String userId) {
+    return getWaybillsCreatedBy(userId)
         .where((waybill) => waybill.status == invoicedStatus)
         .toList();
   }

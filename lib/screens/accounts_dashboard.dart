@@ -41,8 +41,13 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
       try {
         final allWaybills = await FirestoreWaybillService.getAllWaybills();
         await WaybillService.replaceCachedWaybills(allWaybills);
-      } catch (_) {
+      } catch (error) {
         // Keep using local cached data when Firestore is unavailable.
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not load waybills: $error')),
+          );
+        }
       }
     }
 

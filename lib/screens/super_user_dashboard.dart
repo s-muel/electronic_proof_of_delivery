@@ -149,7 +149,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     var selectedRole = 'officer';
     var isSaving = false;
 
-    await showDialog<void>(
+    final userCreated = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
@@ -260,16 +260,13 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                             );
 
                             if (!dialogContext.mounted) return;
-                            Navigator.pop(dialogContext);
+                            Navigator.pop(dialogContext, true);
                           } catch (error) {
                             if (!dialogContext.mounted) return;
                             ScaffoldMessenger.of(dialogContext).showSnackBar(
                               SnackBar(content: Text('Could not add user: $error')),
                             );
-                          } finally {
-                            if (dialogContext.mounted) {
-                              setDialogState(() => isSaving = false);
-                            }
+                            setDialogState(() => isSaving = false);
                           }
                         },
                   icon: isSaving
@@ -291,7 +288,16 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     fullNameController.dispose();
     emailController.dispose();
     passwordController.dispose();
-    await loadAdminData();
+
+    if (userCreated == true) {
+      await loadAdminData();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User added successfully')),
+      );
+    }
   }
 
   String? _requiredValidator(String? value) {

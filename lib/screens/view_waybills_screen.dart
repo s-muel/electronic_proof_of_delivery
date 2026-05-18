@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/waybill_model.dart';
+import '../services/firebase_auth_service.dart';
 import '../services/firestore_waybill_service.dart';
 import '../services/waybill_service.dart';
 
@@ -30,7 +31,7 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
 
     if (result == true) {
       setState(() {
-        allWaybills = WaybillService.getAllWaybills();
+        allWaybills = _getCachedOfficerWaybills();
       });
 
       filterWaybills(searchController.text);
@@ -46,16 +47,18 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
     );
 
     setState(() {
-      waybills = WaybillService.getAllWaybills();
+      waybills = _getCachedOfficerWaybills();
     });
   }
 
   Future<void> loadWaybills() async {
+    final userId = FirebaseAuthService.currentFirebaseUser?.uid ?? '';
+
     try {
-      allWaybills = await FirestoreWaybillService.getAllWaybills();
+      allWaybills = await FirestoreWaybillService.getWaybillsCreatedBy(userId);
       await WaybillService.replaceCachedWaybills(allWaybills);
     } catch (_) {
-      allWaybills = WaybillService.getAllWaybills();
+      allWaybills = WaybillService.getWaybillsCreatedBy(userId);
     }
 
     if (!mounted) return;
@@ -86,8 +89,13 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
   @override
   void initState() {
     super.initState();
-    waybills = WaybillService.getAllWaybills();
+    waybills = _getCachedOfficerWaybills();
     loadWaybills();
+  }
+
+  List<WaybillModel> _getCachedOfficerWaybills() {
+    final userId = FirebaseAuthService.currentFirebaseUser?.uid ?? '';
+    return WaybillService.getWaybillsCreatedBy(userId);
   }
 
   @override
