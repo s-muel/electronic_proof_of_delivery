@@ -27,9 +27,13 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
     super.initState();
     if (shouldSkipAutomaticFirebaseRefresh) {
       setState(() {
-        pendingCount = WaybillService.getPendingWaybills().length;
-        deliveredCount = WaybillService.getDeliveredWaybills().length;
-        invoicedCount = WaybillService.getInvoicedWaybills().length;
+        final userId = FirebaseAuthService.currentFirebaseUser?.uid ?? '';
+        pendingCount =
+            WaybillService.getPendingWaybillsCreatedBy(userId).length;
+        deliveredCount =
+            WaybillService.getDeliveredWaybillsCreatedBy(userId).length;
+        invoicedCount =
+            WaybillService.getInvoicedWaybillsCreatedBy(userId).length;
       });
     } else {
       loadDashboardCounts();
@@ -37,21 +41,33 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
   }
 
   Future<void> loadDashboardCounts() async {
+    final userId = FirebaseAuthService.currentFirebaseUser?.uid ?? '';
+    var officerWaybills = WaybillService.getWaybillsCreatedBy(userId);
+
     if (shouldUseFirestoreData) {
       try {
-        final allWaybills = await FirestoreWaybillService.getAllWaybills();
-        await WaybillService.replaceCachedWaybills(allWaybills);
+        officerWaybills = await FirestoreWaybillService.getWaybillsCreatedBy(
+          userId,
+        );
+        await WaybillService.replaceCachedWaybills(officerWaybills);
       } catch (_) {
         // Keep using the local cache when Firestore is unavailable.
+        officerWaybills = WaybillService.getWaybillsCreatedBy(userId);
       }
     }
 
     if (!mounted) return;
 
     setState(() {
-      pendingCount = WaybillService.getPendingWaybills().length;
-      deliveredCount = WaybillService.getDeliveredWaybills().length;
-      invoicedCount = WaybillService.getInvoicedWaybills().length;
+      pendingCount = officerWaybills
+          .where((waybill) => waybill.status == WaybillService.pendingDeliveryStatus)
+          .length;
+      deliveredCount = officerWaybills
+          .where((waybill) => waybill.status == WaybillService.deliveredStatus)
+          .length;
+      invoicedCount = officerWaybills
+          .where((waybill) => waybill.status == WaybillService.invoicedStatus)
+          .length;
     });
   }
 

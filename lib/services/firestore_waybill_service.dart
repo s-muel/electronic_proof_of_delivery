@@ -64,6 +64,26 @@ class FirestoreWaybillService {
     return waybills.where((waybill) => !waybill.isDeleted).toList();
   }
 
+  static Future<List<WaybillModel>> getWaybillsCreatedBy(
+    String userId, {
+    bool includeDeleted = false,
+  }) async {
+    final snapshot = await _waybills
+        .where('createdByUserId', isEqualTo: userId)
+        .get();
+
+    final waybills = snapshot.docs
+        .map((doc) => WaybillModel.fromMap(doc.data()))
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    if (includeDeleted) {
+      return waybills;
+    }
+
+    return waybills.where((waybill) => !waybill.isDeleted).toList();
+  }
+
   static Future<List<WaybillModel>> getWaybillsByStatus(String status) async {
     final snapshot = await _waybills
         .where('status', isEqualTo: status)
