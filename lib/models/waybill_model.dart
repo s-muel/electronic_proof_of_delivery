@@ -43,6 +43,9 @@ class WaybillModel {
   final bool isDeleted;
   final String deletedAt;
   final String deletedBy;
+  final String createdByUserId;
+  final String createdByName;
+  final String createdByEmail;
 
   WaybillModel({
     required this.bajNumber,
@@ -83,6 +86,9 @@ class WaybillModel {
     this.isDeleted = false,
     this.deletedAt = '',
     this.deletedBy = '',
+    this.createdByUserId = '',
+    this.createdByName = '',
+    this.createdByEmail = '',
   }) : updatedAt = updatedAt ?? createdAt;
 
   Map<String, dynamic> toMap() {
@@ -125,6 +131,9 @@ class WaybillModel {
       'isDeleted': isDeleted,
       'deletedAt': deletedAt,
       'deletedBy': deletedBy,
+      'createdByUserId': createdByUserId,
+      'createdByName': createdByName,
+      'createdByEmail': createdByEmail,
     };
   }
 
@@ -166,6 +175,9 @@ class WaybillModel {
       'isDeleted': isDeleted,
       'deletedAt': deletedAt,
       'deletedBy': deletedBy,
+      'createdByUserId': createdByUserId,
+      'createdByName': createdByName,
+      'createdByEmail': createdByEmail,
     };
   }
 
@@ -212,6 +224,9 @@ class WaybillModel {
       isDeleted: map['isDeleted'] ?? false,
       deletedAt: map['deletedAt'] ?? '',
       deletedBy: map['deletedBy'] ?? '',
+      createdByUserId: map['createdByUserId'] ?? '',
+      createdByName: map['createdByName'] ?? '',
+      createdByEmail: map['createdByEmail'] ?? '',
     );
   }
 
@@ -254,6 +269,9 @@ class WaybillModel {
     bool? isDeleted,
     String? deletedAt,
     String? deletedBy,
+    String? createdByUserId,
+    String? createdByName,
+    String? createdByEmail,
   }) {
     return WaybillModel(
       bajNumber: bajNumber ?? this.bajNumber,
@@ -295,6 +313,9 @@ class WaybillModel {
       isDeleted: isDeleted ?? this.isDeleted,
       deletedAt: deletedAt ?? this.deletedAt,
       deletedBy: deletedBy ?? this.deletedBy,
+      createdByUserId: createdByUserId ?? this.createdByUserId,
+      createdByName: createdByName ?? this.createdByName,
+      createdByEmail: createdByEmail ?? this.createdByEmail,
     );
   }
 

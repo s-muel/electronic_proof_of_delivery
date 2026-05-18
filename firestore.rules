@@ -1,0 +1,101 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function currentUserProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isActiveUser() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && currentUserProfile().data.isActive == true;
+    }
+
+    function hasRole(roles) {
+      return isActiveUser()
+        && currentUserProfile().data.role in roles;
+    }
+
+    function isSuperUser() {
+      return hasRole(['super_user', 'super user', 'Super User', 'admin', 'Admin']);
+    }
+
+    function isOfficer() {
+      return hasRole(['officer', 'Officer', 'officer in charge', 'Officer In Charge']);
+    }
+
+    function canReadWaybill() {
+      return hasRole([
+          'driver',
+          'Driver',
+          'accounts',
+          'Accounts',
+          'super_user',
+          'super user',
+          'Super User',
+          'admin',
+          'Admin'
+        ])
+        || (isOfficer() && resource.data.createdByUserId == request.auth.uid);
+    }
+
+    function canCreateWaybill() {
+      return hasRole(['super_user', 'super user', 'Super User', 'admin', 'Admin'])
+        || (
+          isOfficer()
+          && request.resource.data.createdByUserId == request.auth.uid
+        );
+    }
+
+    function canUpdateWaybill() {
+      return hasRole([
+          'driver',
+          'Driver',
+          'accounts',
+          'Accounts',
+          'super_user',
+          'super user',
+          'Super User',
+          'admin',
+          'Admin'
+        ])
+        || (
+          isOfficer()
+          && resource.data.createdByUserId == request.auth.uid
+          && request.resource.data.createdByUserId == resource.data.createdByUserId
+        );
+    }
+
+    match /users/{userId} {
+      allow read: if isSuperUser() || (isSignedIn() && request.auth.uid == userId);
+      allow create, update, delete: if isSuperUser();
+    }
+
+    match /waybills/{waybillId} {
+      allow read: if canReadWaybill();
+      allow create: if canCreateWaybill();
+      allow update: if canUpdateWaybill();
+      allow delete: if isSuperUser();
+    }
+
+    match /counters/{counterId} {
+      allow read, update, create: if hasRole([
+        'officer',
+        'Officer',
+        'officer in charge',
+        'Officer In Charge',
+        'super_user',
+        'super user',
+        'Super User',
+        'admin',
+        'Admin'
+      ]);
+      allow delete: if isSuperUser();
+    }
+  }
+}
