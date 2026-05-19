@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 class CloudinaryService {
-  static const String cloudName = 'bajfreight';
+  static const String cloudName = 'bajfreight1';
   static const String uploadPreset = 'epod_unsigned';
 
   static Future<String?> uploadSignature({
