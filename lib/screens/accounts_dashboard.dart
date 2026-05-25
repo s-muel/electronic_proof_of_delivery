@@ -126,6 +126,7 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
     required bool showMarkInvoicedButton,
     int? readyCount,
     int? invoicedCount,
+    bool showFullSummary = false,
   }) async {
     await Navigator.push(
       context,
@@ -136,6 +137,7 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
           showMarkInvoicedButton: showMarkInvoicedButton,
           readyCount: readyCount,
           invoicedCount: invoicedCount,
+          showFullSummary: showFullSummary,
         ),
       ),
     );
@@ -370,23 +372,19 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
                   ),
                   _DashboardCard(
                     icon: Icons.visibility,
-                    title: 'View Waybill',
-                    subtitle: 'View delivered and invoiced waybills only',
+                    title: 'View Waybills',
+                    subtitle: 'View all waybills in the system',
                     color: Colors.blue,
                     onTap: () {
-                      final viewableWaybills = [
-                        ...WaybillService.getDeliveredWaybills(),
-                        ...WaybillService.getInvoicedWaybills(),
-                      ];
-
                       openAccountsList(
-                        title: 'View Waybills',
-                        waybills: viewableWaybills,
+                        title: 'View All Waybills',
+                        waybills: WaybillService.getAllWaybills(),
                         showMarkInvoicedButton: false,
                         readyCount:
                             WaybillService.getDeliveredWaybills().length,
                         invoicedCount:
                             WaybillService.getInvoicedWaybills().length,
+                        showFullSummary: true,
                       );
                     },
                   ),
@@ -406,6 +404,7 @@ class AccountsWaybillListScreen extends StatefulWidget {
   final bool showMarkInvoicedButton;
   final int? readyCount;
   final int? invoicedCount;
+  final bool showFullSummary;
 
   const AccountsWaybillListScreen({
     super.key,
@@ -414,6 +413,7 @@ class AccountsWaybillListScreen extends StatefulWidget {
     required this.showMarkInvoicedButton,
     this.readyCount,
     this.invoicedCount,
+    this.showFullSummary = false,
   });
 
   @override
@@ -608,14 +608,24 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
     const Color pageColor = Colors.blue;
     final IconData pageIcon = widget.showMarkInvoicedButton
         ? Icons.receipt_long
+        : widget.showFullSummary
+        ? Icons.visibility
         : Icons.done_all;
+    final pendingCount = filteredWaybills
+        .where((waybill) => waybill.status == 'Pending Delivery')
+        .length;
+    final deliveredCount = filteredWaybills
+        .where((waybill) => waybill.status == 'Delivered')
+        .length;
     final readyCount =
         widget.readyCount ??
         allWaybills.where((waybill) => waybill.status == 'Delivered').length;
-    final invoicedCount = allWaybills
+    final invoicedCount = filteredWaybills
         .where((waybill) => waybill.status == 'Invoiced')
         .length;
-    final displayInvoicedCount = widget.invoicedCount ?? invoicedCount;
+    final displayInvoicedCount = widget.showFullSummary
+        ? invoicedCount
+        : widget.invoicedCount ?? invoicedCount;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
@@ -687,6 +697,8 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
                           Text(
                             widget.showMarkInvoicedButton
                                 ? 'Delivered waybills waiting for invoice processing.'
+                                : widget.showFullSummary
+                                ? 'Summary of all waybills in the system.'
                                 : 'Waybills already marked as invoiced.',
                             style: const TextStyle(color: Colors.black54),
                           ),
@@ -697,24 +709,51 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
                   Wrap(
                     spacing: 10,
                     runSpacing: 10,
-                    children: [
-                      _AccountsSummaryPill(
-                        label: 'Showing',
-                        value: filteredWaybills.length.toString(),
-                        color: pageColor,
-                        icon: Icons.filter_list,
-                      ),
-                      _AccountsSummaryPill(
-                        label: widget.showMarkInvoicedButton
-                            ? 'Ready'
-                            : 'Invoiced',
-                        value: widget.showMarkInvoicedButton
-                            ? readyCount.toString()
-                            : displayInvoicedCount.toString(),
-                        color: pageColor,
-                        icon: pageIcon,
-                      ),
-                    ],
+                    children: widget.showFullSummary
+                        ? [
+                            _AccountsSummaryPill(
+                              label: 'Total',
+                              value: filteredWaybills.length.toString(),
+                              color: Colors.blue,
+                              icon: Icons.list_alt,
+                            ),
+                            _AccountsSummaryPill(
+                              label: 'Pending',
+                              value: pendingCount.toString(),
+                              color: Colors.orange,
+                              icon: Icons.schedule,
+                            ),
+                            _AccountsSummaryPill(
+                              label: 'Delivered',
+                              value: deliveredCount.toString(),
+                              color: Colors.green,
+                              icon: Icons.check_circle,
+                            ),
+                            _AccountsSummaryPill(
+                              label: 'Invoiced',
+                              value: displayInvoicedCount.toString(),
+                              color: Colors.blue,
+                              icon: Icons.receipt_long,
+                            ),
+                          ]
+                        : [
+                            _AccountsSummaryPill(
+                              label: 'Showing',
+                              value: filteredWaybills.length.toString(),
+                              color: pageColor,
+                              icon: Icons.filter_list,
+                            ),
+                            _AccountsSummaryPill(
+                              label: widget.showMarkInvoicedButton
+                                  ? 'Ready'
+                                  : 'Invoiced',
+                              value: widget.showMarkInvoicedButton
+                                  ? readyCount.toString()
+                                  : displayInvoicedCount.toString(),
+                              color: pageColor,
+                              icon: pageIcon,
+                            ),
+                          ],
                   ),
                 ],
               ),
