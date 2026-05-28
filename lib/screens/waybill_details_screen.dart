@@ -33,9 +33,10 @@ class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
   Future<void> downloadPdf() async {
     final pdfBytes = await PdfService.generateWaybillPdf(
       currentWaybill,
-      receiverSignatureBytes: currentWaybill.receiverSignatureBytes,
-      driverSignatureBytes: currentWaybill.driverSignatureBytes,
-    );
+        receiverSignatureBytes: currentWaybill.receiverSignatureBytes,
+        driverSignatureBytes: currentWaybill.driverSignatureBytes,
+        receiverStampBytes: currentWaybill.receiverStampBytes,
+      );
 
     await Printing.layoutPdf(
       name: 'Waybill_${currentWaybill.waybillNumber}.pdf',
@@ -132,6 +133,7 @@ class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
                       receiverSignatureBytes:
                           currentWaybill.receiverSignatureBytes,
                       driverSignatureBytes: currentWaybill.driverSignatureBytes,
+                      receiverStampBytes: currentWaybill.receiverStampBytes,
                     ),
                   ),
                 ),

@@ -8,12 +8,14 @@ class WaybillTemplateWidget extends StatelessWidget {
 
   final Uint8List? receiverSignatureBytes;
   final Uint8List? driverSignatureBytes;
+  final Uint8List? receiverStampBytes;
 
   const WaybillTemplateWidget({
     super.key,
     required this.waybill,
     this.receiverSignatureBytes,
     this.driverSignatureBytes,
+    this.receiverStampBytes,
   });
 
   @override
@@ -399,6 +401,16 @@ class WaybillTemplateWidget extends StatelessWidget {
                 : 'Receiver Signature Captured',
             signatureBytes: receiverSignatureBytes,
             imageUrl: waybill.receiverSignatureUrl,
+          ),
+        ),
+        Expanded(
+          child: _signatureBox(
+            label: 'RECEIVER STAMP',
+            value: waybill.receiverStampUrl.isEmpty
+                ? ''
+                : 'Receiver Stamp Captured',
+            signatureBytes: receiverStampBytes,
+            imageUrl: waybill.receiverStampUrl,
           ),
         ),
       ],
