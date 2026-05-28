@@ -12,6 +12,7 @@ class PdfService {
     WaybillModel waybill, {
     Uint8List? receiverSignatureBytes,
     Uint8List? driverSignatureBytes,
+    Uint8List? receiverStampBytes,
   }) async {
     final pdf = pw.Document();
 
@@ -25,6 +26,11 @@ class PdfService {
     final pw.MemoryImage? driverSignatureImage = await _loadSignatureImage(
       localBytes: driverSignatureBytes,
       imageUrl: waybill.driverSignatureUrl,
+    );
+
+    final pw.MemoryImage? receiverStampImage = await _loadSignatureImage(
+      localBytes: receiverStampBytes,
+      imageUrl: waybill.receiverStampUrl,
     );
 
     try {
@@ -57,6 +63,7 @@ class PdfService {
                   waybill,
                   receiverSignatureImage: receiverSignatureImage,
                   driverSignatureImage: driverSignatureImage,
+                  receiverStampImage: receiverStampImage,
                 ),
                 _buildFooter(),
               ],
@@ -452,6 +459,7 @@ class PdfService {
     WaybillModel waybill, {
     pw.MemoryImage? receiverSignatureImage,
     pw.MemoryImage? driverSignatureImage,
+    pw.MemoryImage? receiverStampImage,
   }) {
     return pw.Row(
       children: [
@@ -477,6 +485,15 @@ class PdfService {
                 ? ''
                 : 'Receiver Signature Captured',
             signatureImage: receiverSignatureImage,
+          ),
+        ),
+        pw.Expanded(
+          child: _signatureBox(
+            label: 'RECEIVER STAMP',
+            value: waybill.receiverStampUrl.isEmpty
+                ? ''
+                : 'Receiver Stamp Captured',
+            signatureImage: receiverStampImage,
           ),
         ),
       ],

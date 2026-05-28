@@ -34,6 +34,7 @@ class DeliverySyncService {
     final safeWaybillNumber = _safeWaybillNumber(waybill.waybillNumber);
     var receiverSignatureUrl = waybill.receiverSignatureUrl;
     var driverSignatureUrl = waybill.driverSignatureUrl;
+    var receiverStampUrl = waybill.receiverStampUrl;
 
     if (receiverSignatureUrl.isEmpty) {
       final receiverSignatureBytes = waybill.receiverSignatureBytes;
@@ -73,9 +74,23 @@ class DeliverySyncService {
       driverSignatureUrl = uploadedUrl;
     }
 
+    if (receiverStampUrl.isEmpty && waybill.receiverStampBytes != null) {
+      final uploadedUrl = await CloudinaryService.uploadStamp(
+        stampBytes: waybill.receiverStampBytes!,
+        fileName: 'receiver_stamp_$safeWaybillNumber',
+      );
+
+      if (uploadedUrl == null) {
+        return null;
+      }
+
+      receiverStampUrl = uploadedUrl;
+    }
+
     return waybill.copyWith(
       receiverSignatureUrl: receiverSignatureUrl,
       driverSignatureUrl: driverSignatureUrl,
+      receiverStampUrl: receiverStampUrl,
       status: WaybillService.deliveredStatus,
       syncStatus: 'Synced',
       updatedAt: DateTime.now().toIso8601String(),

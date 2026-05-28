@@ -32,9 +32,11 @@ class WaybillModel {
   final String receiverName;
   final String receiverSignatureUrl; // Receiver signature image URL
   final String driverSignatureUrl; // Driver signature image URL
+  final String receiverStampUrl; // Receiver stamp image URL
 
   final Uint8List? receiverSignatureBytes; // Local receiver signature image
   final Uint8List? driverSignatureBytes; // Local driver signature image
+  final Uint8List? receiverStampBytes; // Local receiver stamp image
 
   final String createdAt;
   final String updatedAt;
@@ -77,8 +79,10 @@ class WaybillModel {
     this.receiverName = '',
     this.receiverSignatureUrl = '',
     this.driverSignatureUrl = '',
+    this.receiverStampUrl = '',
     this.receiverSignatureBytes,
     this.driverSignatureBytes,
+    this.receiverStampBytes,
     required this.createdAt,
     String? updatedAt,
     this.deliveredAt = '',
@@ -122,8 +126,10 @@ class WaybillModel {
       'receiverName': receiverName,
       'receiverSignatureUrl': receiverSignatureUrl,
       'driverSignatureUrl': driverSignatureUrl,
+      'receiverStampUrl': receiverStampUrl,
       'receiverSignatureBytes': receiverSignatureBytes,
       'driverSignatureBytes': driverSignatureBytes,
+      'receiverStampBytes': receiverStampBytes,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
       'deliveredAt': deliveredAt,
@@ -168,6 +174,7 @@ class WaybillModel {
       'deliveryRemarks': deliveryRemarks,
       'receiverSignatureUrl': receiverSignatureUrl,
       'driverSignatureUrl': driverSignatureUrl,
+      'receiverStampUrl': receiverStampUrl,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
       'deliveredAt': deliveredAt,
@@ -213,10 +220,12 @@ class WaybillModel {
       receiverSignatureUrl:
           map['receiverSignatureUrl'] ?? map['signatureUrl'] ?? '',
       driverSignatureUrl: map['driverSignatureUrl'] ?? '',
+      receiverStampUrl: map['receiverStampUrl'] ?? '',
       receiverSignatureBytes: _convertToUint8List(
         map['receiverSignatureBytes'],
       ),
       driverSignatureBytes: _convertToUint8List(map['driverSignatureBytes']),
+      receiverStampBytes: _convertToUint8List(map['receiverStampBytes']),
       createdAt: map['createdAt'] ?? '',
       updatedAt: map['updatedAt'],
       deliveredAt: map['deliveredAt'] ?? '',
@@ -260,8 +269,10 @@ class WaybillModel {
     String? receiverName,
     String? receiverSignatureUrl,
     String? driverSignatureUrl,
+    String? receiverStampUrl,
     Uint8List? receiverSignatureBytes,
     Uint8List? driverSignatureBytes,
+    Uint8List? receiverStampBytes,
     String? createdAt,
     String? updatedAt,
     String? deliveredAt,
@@ -303,9 +314,11 @@ class WaybillModel {
       receiverName: receiverName ?? this.receiverName,
       receiverSignatureUrl: receiverSignatureUrl ?? this.receiverSignatureUrl,
       driverSignatureUrl: driverSignatureUrl ?? this.driverSignatureUrl,
+      receiverStampUrl: receiverStampUrl ?? this.receiverStampUrl,
       receiverSignatureBytes:
           receiverSignatureBytes ?? this.receiverSignatureBytes,
       driverSignatureBytes: driverSignatureBytes ?? this.driverSignatureBytes,
+      receiverStampBytes: receiverStampBytes ?? this.receiverStampBytes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       deliveredAt: deliveredAt ?? this.deliveredAt,
