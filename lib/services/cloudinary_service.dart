@@ -11,6 +11,31 @@ class CloudinaryService {
     required Uint8List signatureBytes,
     required String fileName,
   }) async {
+    return uploadImage(
+      imageBytes: signatureBytes,
+      fileName: fileName,
+      folder: 'e_pod_signatures',
+    );
+  }
+
+  static Future<String?> uploadStamp({
+    required Uint8List stampBytes,
+    required String fileName,
+  }) async {
+    return uploadImage(
+      imageBytes: stampBytes,
+      fileName: fileName,
+      folder: 'e_pod_stamps',
+      extension: 'jpg',
+    );
+  }
+
+  static Future<String?> uploadImage({
+    required Uint8List imageBytes,
+    required String fileName,
+    required String folder,
+    String extension = 'png',
+  }) async {
     try {
       final url = Uri.parse(
         'https://api.cloudinary.com/v1_1/$cloudName/image/upload',
@@ -19,12 +44,12 @@ class CloudinaryService {
       final request = http.MultipartRequest('POST', url);
 
       request.fields['upload_preset'] = uploadPreset;
-      request.fields['folder'] = 'e_pod_signatures';
+      request.fields['folder'] = folder;
       request.files.add(
         http.MultipartFile.fromBytes(
           'file',
-          signatureBytes,
-          filename: '$fileName.png',
+          imageBytes,
+          filename: '$fileName.$extension',
         ),
       );
 

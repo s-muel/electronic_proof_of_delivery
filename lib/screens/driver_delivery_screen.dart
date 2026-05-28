@@ -5,6 +5,7 @@ import '../widgets/waybill_template_widget.dart';
 
 import 'dart:typed_data';
 import 'signature_capture_screen.dart';
+import 'stamp_capture_screen.dart';
 
 import '../services/cloudinary_service.dart';
 import '../services/firestore_waybill_service.dart';
@@ -29,6 +30,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
 
   Uint8List? receiverSignatureBytes;
   Uint8List? driverSignatureBytes;
+  Uint8List? receiverStampBytes;
 
   final receiverNameController = TextEditingController();
   final driverNameController = TextEditingController();
@@ -44,6 +46,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
 
   bool receiverSignatureCaptured = false;
   bool driverSignatureCaptured = false;
+  bool receiverStampCaptured = false;
 
   late WaybillModel currentWaybill;
 
@@ -66,6 +69,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
 
     receiverSignatureBytes = widget.waybill.receiverSignatureBytes;
     driverSignatureBytes = widget.waybill.driverSignatureBytes;
+    receiverStampBytes = widget.waybill.receiverStampBytes;
 
     receiverSignatureCaptured =
         widget.waybill.receiverSignatureUrl.isNotEmpty ||
@@ -73,6 +77,8 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
     driverSignatureCaptured =
         widget.waybill.driverSignatureUrl.isNotEmpty ||
         driverSignatureBytes != null;
+    receiverStampCaptured =
+        widget.waybill.receiverStampUrl.isNotEmpty || receiverStampBytes != null;
   }
 
   @override
@@ -124,6 +130,24 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
     }
   }
 
+  Future<void> captureReceiverStamp() async {
+    final result = await Navigator.push<Uint8List>(
+      context,
+      MaterialPageRoute(builder: (_) => const StampCaptureScreen()),
+    );
+
+    if (result != null) {
+      setState(() {
+        receiverStampBytes = result;
+        receiverStampCaptured = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Receiver stamp captured')),
+      );
+    }
+  }
+
   bool get hasSelectedCondition {
     return isOk ||
         isShort ||
@@ -151,6 +175,9 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
           : '',
       driverSignatureUrl: driverSignatureCaptured
           ? 'driver-signature-captured-placeholder'
+          : '',
+      receiverStampUrl: receiverStampCaptured
+          ? 'receiver-stamp-captured-placeholder'
           : '',
     );
   }
@@ -201,8 +228,18 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
               fileName: 'driver_signature_$safeWaybillNumber',
             );
 
+      final receiverStampUrl =
+          driverSignatureUrl == null || receiverStampBytes == null
+          ? null
+          : await CloudinaryService.uploadStamp(
+              stampBytes: receiverStampBytes!,
+              fileName: 'receiver_stamp_$safeWaybillNumber',
+            );
+
       final bool uploadedOnline =
-          receiverSignatureUrl != null && driverSignatureUrl != null;
+          receiverSignatureUrl != null &&
+          driverSignatureUrl != null &&
+          (receiverStampBytes == null || receiverStampUrl != null);
       final now = DateTime.now().toIso8601String();
 
       final updatedWaybill = currentWaybill.copyWith(
@@ -218,8 +255,10 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
         isCompleteOrder: isCompleteOrder,
         receiverSignatureUrl: receiverSignatureUrl ?? '',
         driverSignatureUrl: driverSignatureUrl ?? '',
+        receiverStampUrl: receiverStampUrl ?? '',
         receiverSignatureBytes: receiverSignatureBytes,
         driverSignatureBytes: driverSignatureBytes,
+        receiverStampBytes: receiverStampBytes,
         status: uploadedOnline
             ? WaybillService.deliveredStatus
             : WaybillService.pendingSyncStatus,
@@ -385,6 +424,10 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
                                   ],
                                 ),
 
+                          const SizedBox(height: 16),
+
+                          _buildReceiverStampBox(),
+
                           const SizedBox(height: 20),
 
                           Align(
@@ -420,6 +463,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
                     waybill: getPreviewWaybill(),
                     receiverSignatureBytes: receiverSignatureBytes,
                     driverSignatureBytes: driverSignatureBytes,
+                    receiverStampBytes: receiverStampBytes,
                   ),
                 ),
               ],
@@ -516,11 +560,22 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
     );
   }
 
+  Widget _buildReceiverStampBox() {
+    return _signatureButton(
+      title: 'Receiver Stamp (Optional)',
+      isCaptured: receiverStampCaptured,
+      signatureBytes: receiverStampBytes,
+      onTap: captureReceiverStamp,
+      emptyIcon: Icons.camera_alt,
+    );
+  }
+
   Widget _signatureButton({
     required String title,
     required bool isCaptured,
     required VoidCallback onTap,
     Uint8List? signatureBytes,
+    IconData emptyIcon = Icons.draw,
   }) {
     return InkWell(
       onTap: onTap,
@@ -537,7 +592,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
         child: Row(
           children: [
             Icon(
-              isCaptured ? Icons.check_circle : Icons.draw,
+              isCaptured ? Icons.check_circle : emptyIcon,
               color: isCaptured ? Colors.green : Colors.grey,
             ),
             const SizedBox(width: 10),
