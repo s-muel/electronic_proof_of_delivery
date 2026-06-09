@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../models/app_user_model.dart';
 import '../models/waybill_model.dart';
 import '../services/firestore_waybill_service.dart';
+import '../services/app_user_service.dart';
 import '../services/waybill_service.dart';
 import '../utils/platform_flags.dart';
 
@@ -20,6 +22,9 @@ class EditWaybillScreen extends StatefulWidget {
 
 class _EditWaybillScreenState extends State<EditWaybillScreen> {
   final _formKey = GlobalKey<FormState>();
+  bool isLoadingDrivers = false;
+  List<AppUserModel> drivers = [];
+  AppUserModel? selectedDriver;
 
   final bajNumberController = TextEditingController();
   final waybillNumberController = TextEditingController();
@@ -58,6 +63,59 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
     hazardousCargoTypeController.text = widget.waybill.hazardousCargoType;
     unNumberController.text = widget.waybill.unNumber;
     tremcardController.text = widget.waybill.tremcard;
+    loadDrivers();
+  }
+
+  Future<void> loadDrivers() async {
+    if (!shouldUseFirestoreData) return;
+
+    setState(() => isLoadingDrivers = true);
+
+    try {
+      final loadedDrivers = await AppUserService.getActiveDrivers();
+      if (!mounted) return;
+
+      final assignedDriver = _findAssignedDriver(loadedDrivers);
+      setState(() {
+        drivers = loadedDrivers;
+        selectedDriver = assignedDriver;
+        if (assignedDriver != null) {
+          driverNameController.text = _driverDisplayName(assignedDriver);
+        }
+        isLoadingDrivers = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() => isLoadingDrivers = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unable to load drivers. Please check your connection.',
+          ),
+        ),
+      );
+    }
+  }
+
+  AppUserModel? _findAssignedDriver(List<AppUserModel> loadedDrivers) {
+    final assignedDriverId = widget.waybill.assignedDriverId.trim();
+    if (assignedDriverId.isNotEmpty) {
+      for (final driver in loadedDrivers) {
+        if (driver.userId == assignedDriverId) return driver;
+      }
+    }
+
+    final savedDriverName = widget.waybill.driverName.trim().toLowerCase();
+    if (savedDriverName.isEmpty) return null;
+
+    for (final driver in loadedDrivers) {
+      if (_driverDisplayName(driver).toLowerCase() == savedDriverName) {
+        return driver;
+      }
+    }
+
+    return null;
   }
 
   @override
@@ -83,7 +141,17 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
 
   Future<void> updateWaybill() async {
     if (_formKey.currentState!.validate()) {
+      if (selectedDriver == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please assign this waybill to a driver.'),
+          ),
+        );
+        return;
+      }
+
       final now = DateTime.now().toIso8601String();
+      final assignedDriver = selectedDriver;
       final updatedWaybill = widget.waybill.copyWith(
         bajNumber: bajNumberController.text.trim(),
         waybillNumber: waybillNumberController.text.trim(),
@@ -96,7 +164,11 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
         cargoDescription: cargoDescriptionController.text.trim(),
         grossWeight: grossWeightController.text.trim(),
         vehicleNumber: vehicleNumberController.text.trim(),
-        driverName: driverNameController.text.trim(),
+        driverName:
+            assignedDriver?.fullName ?? driverNameController.text.trim(),
+        assignedDriverId: assignedDriver?.userId ?? '',
+        assignedDriverName: assignedDriver?.fullName ?? '',
+        assignedDriverEmail: assignedDriver?.email ?? '',
         comments: commentsController.text.trim(),
         hazardousCargoType: hazardousCargoTypeController.text.trim(),
         unNumber: unNumberController.text.trim(),
@@ -183,7 +255,8 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
   }
 
   Future<void> pickDate() async {
-    final currentDate = DateTime.tryParse(dateController.text) ?? DateTime.now();
+    final currentDate =
+        DateTime.tryParse(dateController.text) ?? DateTime.now();
     final selectedDate = await showDatePicker(
       context: context,
       initialDate: currentDate,
@@ -238,6 +311,116 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
         return null;
       },
     );
+  }
+
+  Widget buildDriverAutocomplete() {
+    return Autocomplete<AppUserModel>(
+      displayStringForOption: _driverDisplayName,
+      optionsBuilder: (textEditingValue) {
+        final searchText = textEditingValue.text.trim().toLowerCase();
+
+        if (searchText.isEmpty) {
+          return drivers;
+        }
+
+        return drivers.where((driver) {
+          return _driverDisplayName(
+                driver,
+              ).toLowerCase().contains(searchText) ||
+              driver.email.toLowerCase().contains(searchText);
+        });
+      },
+      onSelected: (driver) {
+        setState(() {
+          selectedDriver = driver;
+          driverNameController.text = _driverDisplayName(driver);
+        });
+      },
+      fieldViewBuilder:
+          (context, textEditingController, focusNode, onFieldSubmitted) {
+            final selectedText = selectedDriver == null
+                ? driverNameController.text
+                : _driverDisplayName(selectedDriver!);
+            if (textEditingController.text.isEmpty && selectedText.isNotEmpty) {
+              textEditingController.text = selectedText;
+            }
+
+            return TextFormField(
+              controller: textEditingController,
+              focusNode: focusNode,
+              enabled: !isLoadingDrivers,
+              decoration: InputDecoration(
+                labelText: 'Assign Driver',
+                helperText: isLoadingDrivers
+                    ? 'Loading drivers...'
+                    : 'Start typing the driver name',
+                prefixIcon: const Icon(Icons.badge),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 14,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFFD0D7DE)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFFD0D7DE)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Colors.blue, width: 1.5),
+                ),
+              ),
+              onChanged: (_) {
+                if (selectedDriver != null &&
+                    textEditingController.text !=
+                        _driverDisplayName(selectedDriver!)) {
+                  setState(() {
+                    selectedDriver = null;
+                    driverNameController.clear();
+                  });
+                }
+              },
+              validator: (_) {
+                if (selectedDriver == null) return 'Assign Driver is required';
+                return null;
+              },
+            );
+          },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(14),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 240, maxWidth: 452),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (context, index) {
+                  final driver = options.elementAt(index);
+
+                  return ListTile(
+                    leading: const Icon(Icons.person),
+                    title: Text(_driverDisplayName(driver)),
+                    onTap: () => onSelected(driver),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _driverDisplayName(AppUserModel driver) {
+    return driver.fullName.trim().isEmpty ? driver.email : driver.fullName;
   }
 
   Widget _sectionCard({
@@ -457,12 +640,7 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
                       ),
                       _fieldBox(
                         isWideScreen: isWideScreen,
-                        child: buildTextField(
-                          label: 'Driver Name',
-                          controller: driverNameController,
-                          requiredField: false,
-                          icon: Icons.badge,
-                        ),
+                        child: buildDriverAutocomplete(),
                       ),
                     ],
                   ),

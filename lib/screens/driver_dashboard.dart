@@ -38,17 +38,24 @@ class _DriverDashboardState extends State<DriverDashboard> {
   }
 
   void loadPendingWaybills() {
+    final driverId = FirebaseAuthService.currentFirebaseUser?.uid ?? '';
+
     setState(() {
-      pendingWaybills = WaybillService.getPendingWaybills();
-      pendingSyncWaybills = WaybillService.getPendingSyncWaybills();
+      pendingWaybills =
+          WaybillService.getPendingWaybillsAssignedToDriver(driverId);
+      pendingSyncWaybills =
+          WaybillService.getPendingSyncWaybillsAssignedToDriver(driverId);
     });
   }
 
   Future<void> loadPendingWaybillsFromFirestore() async {
+    final driverId = FirebaseAuthService.currentFirebaseUser?.uid ?? '';
+
     if (shouldUseFirestoreData) {
       try {
-        final allWaybills = await FirestoreWaybillService.getAllWaybills();
-        await WaybillService.replaceCachedWaybills(allWaybills);
+        final assignedWaybills =
+            await FirestoreWaybillService.getWaybillsAssignedToDriver(driverId);
+        await WaybillService.replaceCachedWaybills(assignedWaybills);
       } catch (_) {
         // Keep using the local cache when Firestore is unavailable.
       }
@@ -82,8 +89,11 @@ class _DriverDashboardState extends State<DriverDashboard> {
     if (!mounted) return;
 
     setState(() {
-      pendingWaybills = WaybillService.getPendingWaybills();
-      pendingSyncWaybills = WaybillService.getPendingSyncWaybills();
+      final driverId = FirebaseAuthService.currentFirebaseUser?.uid ?? '';
+      pendingWaybills =
+          WaybillService.getPendingWaybillsAssignedToDriver(driverId);
+      pendingSyncWaybills =
+          WaybillService.getPendingSyncWaybillsAssignedToDriver(driverId);
       isSyncing = false;
     });
 

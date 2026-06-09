@@ -13,6 +13,9 @@ class WaybillModel {
   final String grossWeight;
   final String vehicleNumber;
   final String driverName;
+  final String assignedDriverId;
+  final String assignedDriverName;
+  final String assignedDriverEmail;
   final String comments;
   final String hazardousCargoType;
   final String unNumber;
@@ -62,6 +65,9 @@ class WaybillModel {
     required this.grossWeight,
     required this.vehicleNumber,
     required this.driverName,
+    this.assignedDriverId = '',
+    this.assignedDriverName = '',
+    this.assignedDriverEmail = '',
     required this.comments,
     this.hazardousCargoType = '',
     this.unNumber = '',
@@ -109,6 +115,9 @@ class WaybillModel {
       'grossWeight': grossWeight,
       'vehicleNumber': vehicleNumber,
       'driverName': driverName,
+      'assignedDriverId': assignedDriverId,
+      'assignedDriverName': assignedDriverName,
+      'assignedDriverEmail': assignedDriverEmail,
       'comments': comments,
       'hazardousCargoType': hazardousCargoType,
       'unNumber': unNumber,
@@ -161,6 +170,9 @@ class WaybillModel {
       'tremcard': tremcard,
       'vehicleNumber': vehicleNumber,
       'driverName': driverName,
+      'assignedDriverId': assignedDriverId,
+      'assignedDriverName': assignedDriverName,
+      'assignedDriverEmail': assignedDriverEmail,
       'receiverName': receiverName,
       'status': status,
       'syncStatus': syncStatus,
@@ -202,6 +214,9 @@ class WaybillModel {
       grossWeight: map['grossWeight'] ?? '',
       vehicleNumber: map['vehicleNumber'] ?? '',
       driverName: map['driverName'] ?? '',
+      assignedDriverId: map['assignedDriverId'] ?? '',
+      assignedDriverName: map['assignedDriverName'] ?? '',
+      assignedDriverEmail: map['assignedDriverEmail'] ?? '',
       comments: map['comments'] ?? '',
       hazardousCargoType: map['hazardousCargoType'] ?? '',
       unNumber: map['unNumber'] ?? '',
@@ -252,6 +267,9 @@ class WaybillModel {
     String? grossWeight,
     String? vehicleNumber,
     String? driverName,
+    String? assignedDriverId,
+    String? assignedDriverName,
+    String? assignedDriverEmail,
     String? comments,
     String? hazardousCargoType,
     String? unNumber,
@@ -297,6 +315,9 @@ class WaybillModel {
       grossWeight: grossWeight ?? this.grossWeight,
       vehicleNumber: vehicleNumber ?? this.vehicleNumber,
       driverName: driverName ?? this.driverName,
+      assignedDriverId: assignedDriverId ?? this.assignedDriverId,
+      assignedDriverName: assignedDriverName ?? this.assignedDriverName,
+      assignedDriverEmail: assignedDriverEmail ?? this.assignedDriverEmail,
       comments: comments ?? this.comments,
       hazardousCargoType: hazardousCargoType ?? this.hazardousCargoType,
       unNumber: unNumber ?? this.unNumber,
