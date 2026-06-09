@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../models/app_user_model.dart';
 import '../models/waybill_model.dart';
+import '../services/app_user_service.dart';
 import '../services/firebase_auth_service.dart';
 import '../services/firestore_waybill_service.dart';
 import '../services/waybill_service.dart';
@@ -15,6 +17,9 @@ class CreateWaybillScreen extends StatefulWidget {
 class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
   final _formKey = GlobalKey<FormState>();
   bool isSaving = false;
+  bool isLoadingDrivers = false;
+  List<AppUserModel> drivers = [];
+  AppUserModel? selectedDriver;
 
   final bajNumberController = TextEditingController();
   final waybillNumberController = TextEditingController();
@@ -39,6 +44,30 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
     super.initState();
     dateController.text = _formatDate(DateTime.now());
     waybillNumberController.text = WaybillService.generateNextWaybillNumber();
+    loadDrivers();
+  }
+
+  Future<void> loadDrivers() async {
+    if (!shouldUseFirestoreData) return;
+
+    setState(() => isLoadingDrivers = true);
+
+    try {
+      final loadedDrivers = await AppUserService.getActiveDrivers();
+      if (!mounted) return;
+
+      setState(() {
+        drivers = loadedDrivers;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not load driver list.')),
+      );
+    } finally {
+      if (mounted) setState(() => isLoadingDrivers = false);
+    }
   }
 
   @override
@@ -66,6 +95,15 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
     if (isSaving) return;
 
     if (_formKey.currentState!.validate()) {
+      if (selectedDriver == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please assign this waybill to a driver.'),
+          ),
+        );
+        return;
+      }
+
       setState(() => isSaving = true);
 
       var waybillNumber = waybillNumberController.text.trim();
@@ -96,7 +134,9 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
         }
 
         final now = DateTime.now().toIso8601String();
-        final currentProfile = await FirebaseAuthService.getCurrentUserProfile();
+        final assignedDriver = selectedDriver;
+        final currentProfile =
+            await FirebaseAuthService.getCurrentUserProfile();
         final firebaseUser = FirebaseAuthService.currentFirebaseUser;
         final creatorUserId = currentProfile?.userId ?? firebaseUser?.uid ?? '';
         final creatorName =
@@ -115,7 +155,11 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
           cargoDescription: cargoDescriptionController.text.trim(),
           grossWeight: grossWeightController.text.trim(),
           vehicleNumber: vehicleNumberController.text.trim(),
-          driverName: driverNameController.text.trim(),
+          driverName:
+              assignedDriver?.fullName ?? driverNameController.text.trim(),
+          assignedDriverId: assignedDriver?.userId ?? '',
+          assignedDriverName: assignedDriver?.fullName ?? '',
+          assignedDriverEmail: assignedDriver?.email ?? '',
           comments: commentsController.text.trim(),
           createdAt: now,
           updatedAt: now,
@@ -269,6 +313,109 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
         return null;
       },
     );
+  }
+
+  Widget buildDriverAutocomplete() {
+    return Autocomplete<AppUserModel>(
+      displayStringForOption: _driverDisplayName,
+      optionsBuilder: (textEditingValue) {
+        final searchText = textEditingValue.text.trim().toLowerCase();
+
+        if (searchText.isEmpty) {
+          return drivers;
+        }
+
+        return drivers.where((driver) {
+          return _driverDisplayName(
+                driver,
+              ).toLowerCase().contains(searchText) ||
+              driver.email.toLowerCase().contains(searchText);
+        });
+      },
+      onSelected: (driver) {
+        setState(() {
+          selectedDriver = driver;
+          driverNameController.text = _driverDisplayName(driver);
+        });
+      },
+      fieldViewBuilder:
+          (context, textEditingController, focusNode, onFieldSubmitted) {
+            return TextFormField(
+              controller: textEditingController,
+              focusNode: focusNode,
+              enabled: !isLoadingDrivers,
+              decoration: InputDecoration(
+                labelText: 'Assign Driver',
+                helperText: isLoadingDrivers
+                    ? 'Loading drivers...'
+                    : 'Start typing the driver name or email',
+                prefixIcon: const Icon(Icons.badge),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 14,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFFD0D7DE)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFFD0D7DE)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Colors.blue, width: 1.5),
+                ),
+              ),
+              onChanged: (_) {
+                if (selectedDriver != null &&
+                    textEditingController.text !=
+                        _driverDisplayName(selectedDriver!)) {
+                  setState(() {
+                    selectedDriver = null;
+                    driverNameController.clear();
+                  });
+                }
+              },
+              validator: (_) {
+                if (selectedDriver == null) return 'Assign Driver is required';
+                return null;
+              },
+            );
+          },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(14),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 240, maxWidth: 452),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (context, index) {
+                  final driver = options.elementAt(index);
+
+                  return ListTile(
+                    leading: const Icon(Icons.person),
+                    title: Text(_driverDisplayName(driver)),
+                    onTap: () => onSelected(driver),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _driverDisplayName(AppUserModel driver) {
+    return driver.fullName.trim().isEmpty ? driver.email : driver.fullName;
   }
 
   Widget _sectionCard({
@@ -469,12 +616,7 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
                       ),
                       _fieldBox(
                         isWideScreen: isWideScreen,
-                        child: buildTextField(
-                          label: 'Driver Name',
-                          controller: driverNameController,
-                          requiredField: false,
-                          icon: Icons.badge,
-                        ),
+                        child: buildDriverAutocomplete(),
                       ),
                     ],
                   ),
