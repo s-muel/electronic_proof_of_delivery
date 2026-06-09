@@ -41,6 +41,12 @@ class WaybillService {
         .toList();
   }
 
+  static List<WaybillModel> getWaybillsAssignedToDriver(String driverId) {
+    return getAllWaybills()
+        .where((waybill) => waybill.assignedDriverId == driverId)
+        .toList();
+  }
+
   static Future<void> addWaybill(WaybillModel waybill) async {
     await _box.add(waybill.toMap());
   }
@@ -121,15 +127,31 @@ class WaybillService {
   }
 
   static List<WaybillModel> getPendingWaybillsCreatedBy(String userId) {
-    return getWaybillsCreatedBy(userId)
-        .where((waybill) => waybill.status == pendingDeliveryStatus)
-        .toList();
+    return getWaybillsCreatedBy(
+      userId,
+    ).where((waybill) => waybill.status == pendingDeliveryStatus).toList();
+  }
+
+  static List<WaybillModel> getPendingWaybillsAssignedToDriver(
+    String driverId,
+  ) {
+    return getWaybillsAssignedToDriver(
+      driverId,
+    ).where((waybill) => waybill.status == pendingDeliveryStatus).toList();
   }
 
   static List<WaybillModel> getPendingSyncWaybills() {
     return getAllWaybills()
         .where((waybill) => waybill.status == pendingSyncStatus)
         .toList();
+  }
+
+  static List<WaybillModel> getPendingSyncWaybillsAssignedToDriver(
+    String driverId,
+  ) {
+    return getWaybillsAssignedToDriver(
+      driverId,
+    ).where((waybill) => waybill.status == pendingSyncStatus).toList();
   }
 
   static List<WaybillModel> getDeliveredWaybills() {
@@ -139,9 +161,9 @@ class WaybillService {
   }
 
   static List<WaybillModel> getDeliveredWaybillsCreatedBy(String userId) {
-    return getWaybillsCreatedBy(userId)
-        .where((waybill) => waybill.status == deliveredStatus)
-        .toList();
+    return getWaybillsCreatedBy(
+      userId,
+    ).where((waybill) => waybill.status == deliveredStatus).toList();
   }
 
   static List<WaybillModel> getInvoicedWaybills() {
@@ -151,9 +173,9 @@ class WaybillService {
   }
 
   static List<WaybillModel> getInvoicedWaybillsCreatedBy(String userId) {
-    return getWaybillsCreatedBy(userId)
-        .where((waybill) => waybill.status == invoicedStatus)
-        .toList();
+    return getWaybillsCreatedBy(
+      userId,
+    ).where((waybill) => waybill.status == invoicedStatus).toList();
   }
 
   static Future<void> deleteWaybill(int index) async {

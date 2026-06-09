@@ -37,6 +37,16 @@ class AppUserService {
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
+  static Future<List<AppUserModel>> getActiveDrivers() async {
+    final snapshot = await _users.where('role', isEqualTo: 'driver').get();
+
+    return snapshot.docs
+        .map((doc) => AppUserModel.fromMap(doc.data()))
+        .where((user) => user.isActive)
+        .toList()
+      ..sort((a, b) => a.fullName.compareTo(b.fullName));
+  }
+
   static Future<AppUserModel> createUser({
     required String fullName,
     required String email,
