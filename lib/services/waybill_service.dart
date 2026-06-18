@@ -42,9 +42,11 @@ class WaybillService {
   }
 
   static List<WaybillModel> getWaybillsAssignedToDriver(String driverId) {
-    return getAllWaybills()
+    return _uniqueByWaybillNumber(
+      getAllWaybills()
         .where((waybill) => waybill.assignedDriverId == driverId)
-        .toList();
+        .toList(),
+    );
   }
 
   static Future<void> addWaybill(WaybillModel waybill) async {
@@ -60,7 +62,7 @@ class WaybillService {
 
     await _box.clear();
 
-    for (final waybill in waybills) {
+    for (final waybill in _uniqueByWaybillNumber(waybills)) {
       final pendingSyncWaybill =
           pendingSyncByWaybillNumber[waybill.waybillNumber];
       final waybillToCache = pendingSyncWaybill ?? waybill;
@@ -74,6 +76,21 @@ class WaybillService {
         await _box.add(pendingSyncWaybill.toMap());
       }
     }
+  }
+
+  static List<WaybillModel> _uniqueByWaybillNumber(
+    List<WaybillModel> waybills,
+  ) {
+    final waybillsByNumber = <String, WaybillModel>{};
+
+    for (final waybill in waybills) {
+      final key = waybill.waybillNumber.trim().isEmpty
+          ? '${waybill.bajNumber}-${waybill.createdAt}'
+          : waybill.waybillNumber.trim();
+      waybillsByNumber[key] = waybill;
+    }
+
+    return waybillsByNumber.values.toList();
   }
 
   static String generateNextWaybillNumber() {
