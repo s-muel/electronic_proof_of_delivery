@@ -23,6 +23,7 @@ class WaybillDetailsScreen extends StatefulWidget {
 
 class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
   late WaybillModel currentWaybill;
+  bool isSharingPdf = false;
 
   @override
   void initState() {
@@ -39,9 +40,45 @@ class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
       );
 
     await Printing.layoutPdf(
-      name: 'Waybill_${currentWaybill.waybillNumber}.pdf',
+      name: _pdfFileName(currentWaybill.waybillNumber),
       onLayout: (_) async => pdfBytes,
     );
+  }
+
+  Future<void> sharePdf() async {
+    if (isSharingPdf) return;
+
+    setState(() => isSharingPdf = true);
+
+    try {
+      final pdfBytes = await PdfService.generateWaybillPdf(
+        currentWaybill,
+        receiverSignatureBytes: currentWaybill.receiverSignatureBytes,
+        driverSignatureBytes: currentWaybill.driverSignatureBytes,
+        receiverStampBytes: currentWaybill.receiverStampBytes,
+      );
+
+      await Printing.sharePdf(
+        bytes: pdfBytes,
+        filename: _pdfFileName(currentWaybill.waybillNumber),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to share this waybill PDF.')),
+      );
+    } finally {
+      if (mounted) setState(() => isSharingPdf = false);
+    }
+  }
+
+  String _pdfFileName(String waybillNumber) {
+    final safeWaybillNumber = waybillNumber.replaceAll(
+      RegExp(r'[^a-zA-Z0-9_-]'),
+      '_',
+    );
+    return 'Waybill_$safeWaybillNumber.pdf';
   }
 
   void editWaybill() async {
@@ -75,6 +112,17 @@ class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
+          IconButton(
+            tooltip: 'Share PDF',
+            onPressed: isSharingPdf ? null : sharePdf,
+            icon: isSharingPdf
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.share),
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: FilledButton.icon(

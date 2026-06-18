@@ -9,6 +9,7 @@ import '../widgets/network_status_bar.dart';
 import 'login_screen.dart';
 //import 'waybill_details_screen.dart';
 
+import 'driver_assigned_waybills_screen.dart';
 import 'driver_delivery_screen.dart';
 
 class DriverDashboard extends StatefulWidget {
@@ -21,6 +22,7 @@ class DriverDashboard extends StatefulWidget {
 class _DriverDashboardState extends State<DriverDashboard> {
   List<WaybillModel> pendingWaybills = [];
   List<WaybillModel> pendingSyncWaybills = [];
+  int assignedWaybillCount = 0;
   bool isSyncing = false;
 
   List<WaybillModel> get visibleWaybills {
@@ -32,7 +34,6 @@ class _DriverDashboardState extends State<DriverDashboard> {
     super.initState();
     loadPendingWaybills();
     if (!shouldSkipAutomaticFirebaseRefresh) {
-      loadPendingWaybillsFromFirestore();
       refreshDashboard();
     }
   }
@@ -45,6 +46,8 @@ class _DriverDashboardState extends State<DriverDashboard> {
           WaybillService.getPendingWaybillsAssignedToDriver(driverId);
       pendingSyncWaybills =
           WaybillService.getPendingSyncWaybillsAssignedToDriver(driverId);
+      assignedWaybillCount =
+          WaybillService.getWaybillsAssignedToDriver(driverId).length;
     });
   }
 
@@ -94,6 +97,8 @@ class _DriverDashboardState extends State<DriverDashboard> {
           WaybillService.getPendingWaybillsAssignedToDriver(driverId);
       pendingSyncWaybills =
           WaybillService.getPendingSyncWaybillsAssignedToDriver(driverId);
+      assignedWaybillCount =
+          WaybillService.getWaybillsAssignedToDriver(driverId).length;
       isSyncing = false;
     });
 
@@ -128,6 +133,15 @@ class _DriverDashboardState extends State<DriverDashboard> {
       MaterialPageRoute(
         builder: (_) => DriverDeliveryScreen(waybill: waybill, index: index),
       ),
+    );
+
+    await refreshDashboard();
+  }
+
+  Future<void> openAssignedWaybills() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const DriverAssignedWaybillsScreen()),
     );
 
     await refreshDashboard();
@@ -202,6 +216,13 @@ class _DriverDashboardState extends State<DriverDashboard> {
         icon: Icons.cloud_sync,
         color: Colors.deepOrange,
       ),
+      _DriverSummaryCard(
+        title: 'All Assigned',
+        count: assignedWaybillCount,
+        icon: Icons.assignment,
+        color: Colors.blue,
+        onTap: openAssignedWaybills,
+      ),
     ];
 
     if (isWideScreen) {
@@ -210,11 +231,21 @@ class _DriverDashboardState extends State<DriverDashboard> {
           Expanded(child: cards[0]),
           const SizedBox(width: 12),
           Expanded(child: cards[1]),
+          const SizedBox(width: 12),
+          Expanded(child: cards[2]),
         ],
       );
     }
 
-    return Column(children: [cards[0], const SizedBox(height: 10), cards[1]]);
+    return Column(
+      children: [
+        cards[0],
+        const SizedBox(height: 10),
+        cards[1],
+        const SizedBox(height: 10),
+        cards[2],
+      ],
+    );
   }
 
   Widget _buildEmptyTableMessage() {
@@ -361,68 +392,80 @@ class _DriverSummaryCard extends StatelessWidget {
   final int count;
   final IconData icon;
   final Color color;
+  final VoidCallback? onTap;
 
   const _DriverSummaryCard({
     required this.title,
     required this.count,
     required this.icon,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final cardContent = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  count.toString(),
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    height: 1,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  title,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (onTap != null)
+            Icon(Icons.arrow_forward_ios, color: color, size: 16),
+        ],
+      ),
+    );
+
     return Card(
       elevation: 1.5,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withValues(alpha: 0.25)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: color, size: 24),
+      child: onTap == null
+          ? cardContent
+          : InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: onTap,
+              child: cardContent,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    count.toString(),
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      height: 1,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    title,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
