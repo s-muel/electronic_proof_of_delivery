@@ -260,6 +260,15 @@ class _LoginScreenState extends State<LoginScreen> {
                       label: Text(isLoading ? 'Signing in...' : 'Sign In'),
                     ),
                   ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'v 0.1.6',
+                    style: TextStyle(
+                      color: Colors.black38,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ],
               ),
             ),
