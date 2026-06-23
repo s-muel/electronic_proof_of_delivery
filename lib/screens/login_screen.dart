@@ -82,7 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final role = appUser.role.trim().toLowerCase();
     Widget dashboard;
 
-    if (role == 'officer' || role == 'officer in charge') {
+    if (role == 'officer') {
       dashboard = const OfficerDashboard();
     } else if (role == 'driver') {
       dashboard = const DriverDashboard();

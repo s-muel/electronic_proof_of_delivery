@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -40,6 +43,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
   String? selectedPage;
   String? openingPage;
   bool isLoading = true;
+  bool isMigratingUsers = false;
 
   @override
   void initState() {
@@ -1554,7 +1558,11 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                 const SizedBox(height: 8),
                 Text('Users: ${users.length}'),
                 const SizedBox(height: 8),
-                Text(_backupSourceText()),
+                Text(
+                  shouldUseFirestoreData
+                      ? 'Source: Firestore with local cache refresh'
+                      : 'Source: Local cache on this device',
+                ),
               ],
             ),
           ),
@@ -1629,7 +1637,6 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
   String _roleLabel(String role) {
     switch (role.trim().toLowerCase()) {
       case 'officer':
-      case 'officer in charge':
         return 'Officer';
       case 'driver':
         return 'Driver';
@@ -1640,8 +1647,6 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
       case 'manager':
         return 'Manager';
       case 'super_user':
-      case 'super user':
-      case 'admin':
         return 'Super User';
       default:
         return role;
