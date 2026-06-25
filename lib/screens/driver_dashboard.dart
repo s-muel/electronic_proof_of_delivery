@@ -3,6 +3,7 @@ import '../models/waybill_model.dart';
 import '../services/delivery_sync_service.dart';
 import '../services/firebase_auth_service.dart';
 import '../services/firestore_waybill_service.dart';
+import '../services/settings_service.dart';
 import '../services/waybill_service.dart';
 import '../utils/platform_flags.dart';
 import '../widgets/network_status_bar.dart';
@@ -147,6 +148,32 @@ class _DriverDashboardState extends State<DriverDashboard> {
     await refreshDashboard();
   }
 
+  Future<void> showSenderEmail() async {
+    final settings = await SettingsService().loadSmtpSettings();
+
+    if (!mounted) return;
+
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Mail Sender'),
+          content: Text(
+            settings.senderEmail.trim().isEmpty
+                ? 'No sender email configured.'
+                : settings.senderEmail,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Color getStatusColor(String status) {
     switch (status) {
       case 'Pending Delivery':
@@ -198,6 +225,11 @@ class _DriverDashboardState extends State<DriverDashboard> {
             ),
           ],
         ),
+      ),
+      floatingActionButton: FloatingActionButton.small(
+        onPressed: showSenderEmail,
+        tooltip: 'Mail sender',
+        child: const Icon(Icons.settings),
       ),
     );
   }

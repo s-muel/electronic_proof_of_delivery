@@ -8,7 +8,9 @@ import 'signature_capture_screen.dart';
 import 'stamp_capture_screen.dart';
 
 import '../services/cloudinary_service.dart';
+import '../services/delivery_email_service.dart';
 import '../services/firestore_waybill_service.dart';
+import '../services/whatsapp_share_service.dart';
 import '../utils/platform_flags.dart';
 
 class DriverDeliveryScreen extends StatefulWidget {
@@ -33,6 +35,8 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
   Uint8List? receiverStampBytes;
 
   final receiverNameController = TextEditingController();
+  final receiverEmailController = TextEditingController();
+  final receiverPhoneController = TextEditingController();
   final driverNameController = TextEditingController();
   final remarksController = TextEditingController();
 
@@ -56,6 +60,8 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
     currentWaybill = widget.waybill;
 
     receiverNameController.text = widget.waybill.receiverName;
+    receiverEmailController.text = widget.waybill.receiverEmail;
+    receiverPhoneController.text = widget.waybill.receiverPhone;
     driverNameController.text = widget.waybill.driverName;
     remarksController.text = widget.waybill.deliveryRemarks;
 
@@ -78,12 +84,15 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
         widget.waybill.driverSignatureUrl.isNotEmpty ||
         driverSignatureBytes != null;
     receiverStampCaptured =
-        widget.waybill.receiverStampUrl.isNotEmpty || receiverStampBytes != null;
+        widget.waybill.receiverStampUrl.isNotEmpty ||
+        receiverStampBytes != null;
   }
 
   @override
   void dispose() {
     receiverNameController.dispose();
+    receiverEmailController.dispose();
+    receiverPhoneController.dispose();
     driverNameController.dispose();
     remarksController.dispose();
     super.dispose();
@@ -142,9 +151,9 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
         receiverStampCaptured = true;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Receiver stamp captured')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Receiver stamp captured')));
     }
   }
 
@@ -161,6 +170,8 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
   WaybillModel getPreviewWaybill() {
     return currentWaybill.copyWith(
       receiverName: receiverNameController.text.trim(),
+      receiverEmail: receiverEmailController.text.trim(),
+      receiverPhone: receiverPhoneController.text.trim(),
       driverName: driverNameController.text.trim(),
       deliveryRemarks: remarksController.text.trim(),
       isOk: isOk,
@@ -244,6 +255,8 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
 
       final updatedWaybill = currentWaybill.copyWith(
         receiverName: receiverNameController.text.trim(),
+        receiverEmail: receiverEmailController.text.trim(),
+        receiverPhone: receiverPhoneController.text.trim(),
         driverName: driverNameController.text.trim(),
         deliveryRemarks: remarksController.text.trim(),
         isOk: isOk,
@@ -276,18 +289,85 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
         }
       }
 
+      final receiverEmail = receiverEmailController.text.trim();
+      final receiverPhone = receiverPhoneController.text.trim();
+      DeliveryEmailResult? emailResult;
+      if (uploadedOnline && receiverEmail.isNotEmpty) {
+        emailResult = await DeliveryEmailService.sendSignedWaybill(
+          waybill: updatedWaybill,
+          receiverEmail: receiverEmail,
+        );
+      }
+
+      WhatsAppShareResult? whatsappResult;
+      if (uploadedOnline && receiverPhone.isNotEmpty) {
+        whatsappResult = await WhatsAppShareService.shareWaybillPdfToPhone(
+          waybill: updatedWaybill,
+          receiverPhone: receiverPhone,
+          receiverSignatureBytes: receiverSignatureBytes,
+          driverSignatureBytes: driverSignatureBytes,
+          receiverStampBytes: receiverStampBytes,
+        );
+      }
+
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            uploadedOnline
-                ? 'Delivery submitted successfully'
-                : 'Delivery saved offline. It will sync when internet is available.',
+            _deliveryResultMessage(
+              uploadedOnline: uploadedOnline,
+              emailResult: emailResult,
+              whatsappResult: whatsappResult,
+              phoneProvided: receiverPhone.isNotEmpty,
+            ),
           ),
         ),
       );
 
       Navigator.pop(context, true);
     }
+  }
+
+  String _deliveryResultMessage({
+    required bool uploadedOnline,
+    required bool phoneProvided,
+    WhatsAppShareResult? whatsappResult,
+    DeliveryEmailResult? emailResult,
+  }) {
+    if (!uploadedOnline) {
+      return 'Delivery saved offline. It will sync when internet is available.';
+    }
+
+    if (emailResult == null) {
+      return _appendWhatsappMessage(
+        'Delivery submitted successfully',
+        phoneProvided: phoneProvided,
+        whatsappResult: whatsappResult,
+      );
+    }
+
+    final message = emailResult.sent
+        ? 'Delivery submitted successfully. ${emailResult.message}'
+        : 'Delivery submitted, but ${emailResult.message}';
+
+    return _appendWhatsappMessage(
+      message,
+      phoneProvided: phoneProvided,
+      whatsappResult: whatsappResult,
+    );
+  }
+
+  String _appendWhatsappMessage(
+    String message, {
+    required bool phoneProvided,
+    WhatsAppShareResult? whatsappResult,
+  }) {
+    if (!phoneProvided) return message;
+    if (whatsappResult == null) {
+      return '$message WhatsApp PDF was not sent.';
+    }
+    return '$message ${whatsappResult.message}';
   }
 
   @override
@@ -397,12 +477,14 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
 
                           const SizedBox(height: 20),
 
+                          _buildReceiverContactFields(isWideScreen),
+
+                          const SizedBox(height: 16),
+
                           isWideScreen
                               ? Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Expanded(child: _buildReceiverField()),
-                                    const SizedBox(width: 16),
                                     Expanded(
                                       child: _buildReceiverSignatureBox(),
                                     ),
@@ -414,8 +496,6 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
                                 )
                               : Column(
                                   children: [
-                                    _buildReceiverField(),
-                                    const SizedBox(height: 16),
                                     _buildReceiverSignatureBox(),
                                     const SizedBox(height: 16),
                                     _buildDriverField(),
@@ -507,6 +587,70 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
         }
         return null;
       },
+    );
+  }
+
+  Widget _buildReceiverEmailField() {
+    return TextFormField(
+      controller: receiverEmailController,
+      keyboardType: TextInputType.emailAddress,
+      decoration: const InputDecoration(
+        labelText: 'Receiver Email (Optional)',
+        border: OutlineInputBorder(),
+        prefixIcon: Icon(Icons.email),
+      ),
+      onChanged: (_) => setState(() {}),
+      validator: (value) {
+        final email = value?.trim() ?? '';
+        if (email.isEmpty) return null;
+        if (!email.contains('@')) return 'Enter a valid email address';
+        return null;
+      },
+    );
+  }
+
+  Widget _buildReceiverPhoneField() {
+    return TextFormField(
+      controller: receiverPhoneController,
+      keyboardType: TextInputType.phone,
+      decoration: const InputDecoration(
+        labelText: 'Receiver Phone (Optional)',
+        border: OutlineInputBorder(),
+        prefixIcon: Icon(Icons.phone),
+      ),
+      onChanged: (_) => setState(() {}),
+      validator: (value) {
+        final phone = value?.trim() ?? '';
+        if (phone.isEmpty) return null;
+        final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+        if (digits.length < 9) return 'Enter a valid phone number';
+        return null;
+      },
+    );
+  }
+
+  Widget _buildReceiverContactFields(bool isWideScreen) {
+    if (isWideScreen) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: _buildReceiverField()),
+          const SizedBox(width: 16),
+          Expanded(child: _buildReceiverEmailField()),
+          const SizedBox(width: 16),
+          Expanded(child: _buildReceiverPhoneField()),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        _buildReceiverField(),
+        const SizedBox(height: 16),
+        _buildReceiverEmailField(),
+        const SizedBox(height: 16),
+        _buildReceiverPhoneField(),
+      ],
     );
   }
 
