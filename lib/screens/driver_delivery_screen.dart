@@ -301,6 +301,14 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
 
       WhatsAppShareResult? whatsappResult;
       if (uploadedOnline && receiverPhone.isNotEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Preparing WhatsApp PDF. Please wait...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+
         whatsappResult = await WhatsAppShareService.shareWaybillPdfToPhone(
           waybill: updatedWaybill,
           receiverPhone: receiverPhone,
