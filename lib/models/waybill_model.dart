@@ -33,6 +33,8 @@ class WaybillModel {
   final String status;
   final String syncStatus;
   final String receiverName;
+  final String receiverEmail;
+  final String receiverPhone;
   final String receiverSignatureUrl; // Receiver signature image URL
   final String driverSignatureUrl; // Driver signature image URL
   final String receiverStampUrl; // Receiver stamp image URL
@@ -83,6 +85,8 @@ class WaybillModel {
     this.status = 'Pending Delivery',
     this.syncStatus = 'Synced',
     this.receiverName = '',
+    this.receiverEmail = '',
+    this.receiverPhone = '',
     this.receiverSignatureUrl = '',
     this.driverSignatureUrl = '',
     this.receiverStampUrl = '',
@@ -133,6 +137,8 @@ class WaybillModel {
       'status': status,
       'syncStatus': syncStatus,
       'receiverName': receiverName,
+      'receiverEmail': receiverEmail,
+      'receiverPhone': receiverPhone,
       'receiverSignatureUrl': receiverSignatureUrl,
       'driverSignatureUrl': driverSignatureUrl,
       'receiverStampUrl': receiverStampUrl,
@@ -174,6 +180,8 @@ class WaybillModel {
       'assignedDriverName': assignedDriverName,
       'assignedDriverEmail': assignedDriverEmail,
       'receiverName': receiverName,
+      'receiverEmail': receiverEmail,
+      'receiverPhone': receiverPhone,
       'status': status,
       'syncStatus': syncStatus,
       'isOk': isOk,
@@ -232,6 +240,8 @@ class WaybillModel {
       status: map['status'] ?? 'Pending Delivery',
       syncStatus: map['syncStatus'] ?? 'Synced',
       receiverName: map['receiverName'] ?? '',
+      receiverEmail: map['receiverEmail'] ?? '',
+      receiverPhone: map['receiverPhone'] ?? '',
       receiverSignatureUrl:
           map['receiverSignatureUrl'] ?? map['signatureUrl'] ?? '',
       driverSignatureUrl: map['driverSignatureUrl'] ?? '',
@@ -285,6 +295,8 @@ class WaybillModel {
     String? status,
     String? syncStatus,
     String? receiverName,
+    String? receiverEmail,
+    String? receiverPhone,
     String? receiverSignatureUrl,
     String? driverSignatureUrl,
     String? receiverStampUrl,
@@ -333,6 +345,8 @@ class WaybillModel {
       status: status ?? this.status,
       syncStatus: syncStatus ?? this.syncStatus,
       receiverName: receiverName ?? this.receiverName,
+      receiverEmail: receiverEmail ?? this.receiverEmail,
+      receiverPhone: receiverPhone ?? this.receiverPhone,
       receiverSignatureUrl: receiverSignatureUrl ?? this.receiverSignatureUrl,
       driverSignatureUrl: driverSignatureUrl ?? this.driverSignatureUrl,
       receiverStampUrl: receiverStampUrl ?? this.receiverStampUrl,
