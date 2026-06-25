@@ -6,6 +6,7 @@ import '../models/app_user_model.dart';
 import '../services/firebase_auth_service.dart';
 import 'accounts_dashboard.dart';
 import 'driver_dashboard.dart';
+import 'manager_dashboard.dart';
 import 'management_dashboard.dart';
 import 'officer_dashboard.dart';
 import 'super_user_dashboard.dart';
@@ -67,9 +68,9 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_friendlyLoginError(e))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_friendlyLoginError(e))));
     } finally {
       if (mounted) {
         setState(() => isLoading = false);
@@ -87,9 +88,13 @@ class _LoginScreenState extends State<LoginScreen> {
       dashboard = const DriverDashboard();
     } else if (role == 'accounts') {
       dashboard = const AccountsDashboard();
-    } else if (role == 'management' || role == 'manager') {
+    } else if (role == 'management') {
       dashboard = const ManagementDashboard();
-    } else if (role == 'super_user' || role == 'super user' || role == 'admin') {
+    } else if (role == 'manager') {
+      dashboard = const ManagerDashboard();
+    } else if (role == 'super_user' ||
+        role == 'super user' ||
+        role == 'admin') {
       dashboard = const SuperUserDashboard();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -184,10 +189,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 12),
                   const Text(
                     'BAJ E-POD System',
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 6),
                   const Text(
@@ -262,7 +264,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 14),
                   const Text(
-                    'v 0.1.6',
+                    'v 0.1.8',
                     style: TextStyle(
                       color: Colors.black38,
                       fontSize: 10,

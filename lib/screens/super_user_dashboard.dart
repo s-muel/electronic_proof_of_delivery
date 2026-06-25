@@ -139,7 +139,9 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
 
     final currentUser = await FirebaseAuthService.getCurrentUserProfile();
     final deletedBy =
-        currentUser?.email ?? FirebaseAuthService.currentFirebaseUser?.email ?? '';
+        currentUser?.email ??
+        FirebaseAuthService.currentFirebaseUser?.email ??
+        '';
 
     if (waybill.isDeleted) {
       await WaybillService.restoreWaybillByNumber(waybill.waybillNumber);
@@ -229,7 +231,8 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                           validator: (value) {
                             final email = value?.trim() ?? '';
                             if (email.isEmpty) return 'Email is required';
-                            if (!email.contains('@')) return 'Enter a valid email';
+                            if (!email.contains('@'))
+                              return 'Enter a valid email';
                             return null;
                           },
                         ),
@@ -285,6 +288,10 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                               child: Text('Management'),
                             ),
                             DropdownMenuItem(
+                              value: 'manager',
+                              child: Text('Manager'),
+                            ),
+                            DropdownMenuItem(
                               value: 'super_user',
                               child: Text('Super User'),
                             ),
@@ -302,7 +309,9 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
               ),
               actions: [
                 TextButton(
-                  onPressed: isSaving ? null : () => Navigator.pop(dialogContext),
+                  onPressed: isSaving
+                      ? null
+                      : () => Navigator.pop(dialogContext),
                   child: const Text('Cancel'),
                 ),
                 FilledButton.icon(
@@ -326,7 +335,9 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                           } catch (error) {
                             if (!dialogContext.mounted) return;
                             ScaffoldMessenger.of(dialogContext).showSnackBar(
-                              SnackBar(content: Text('Could not add user: $error')),
+                              SnackBar(
+                                content: Text('Could not add user: $error'),
+                              ),
                             );
                             setDialogState(() => isSaving = false);
                           }
@@ -356,9 +367,9 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User added successfully')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('User added successfully')));
     }
   }
 
@@ -501,8 +512,10 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                           ),
                           validator: (value) {
                             final email = value?.trim() ?? '';
-                            if (email.isEmpty) return 'Sender email is required';
-                            if (!email.contains('@')) return 'Enter a valid email';
+                            if (email.isEmpty)
+                              return 'Sender email is required';
+                            if (!email.contains('@'))
+                              return 'Enter a valid email';
                             return null;
                           },
                         ),
@@ -544,49 +557,45 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
               ),
               actions: [
                 TextButton(
-                  onPressed:
-                      isSaving ? null : () => Navigator.pop(dialogContext),
+                  onPressed: isSaving
+                      ? null
+                      : () => Navigator.pop(dialogContext),
                   child: const Text('Cancel'),
                 ),
                 FilledButton.icon(
-                        onPressed: isSaving
-                            ? null
-                            : () async {
-                                if (!formKey.currentState!.validate()) return;
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) return;
 
-                                setDialogState(() => isSaving = true);
-                                try {
-                                  await settingsService.saveSmtpSettings(
-                                    SmtpSettings(
-                                      smtpHost: hostController.text,
-                                      smtpPort: int.parse(
-                                        portController.text.trim(),
-                                      ),
-                                      smtpSsl: smtpSsl,
-                                      ignoreBadCertificate: true,
-                                      senderEmail: senderEmailController.text,
-                                      senderPassword:
-                                          senderPasswordController.text,
-                                      senderName: senderNameController.text,
-                                    ),
-                                  );
+                          setDialogState(() => isSaving = true);
+                          try {
+                            await settingsService.saveSmtpSettings(
+                              SmtpSettings(
+                                smtpHost: hostController.text,
+                                smtpPort: int.parse(portController.text.trim()),
+                                smtpSsl: smtpSsl,
+                                ignoreBadCertificate: true,
+                                senderEmail: senderEmailController.text,
+                                senderPassword: senderPasswordController.text,
+                                senderName: senderNameController.text,
+                              ),
+                            );
 
-                                  if (!dialogContext.mounted) return;
-                                  Navigator.pop(dialogContext, true);
-                                } catch (error) {
-                                  if (!dialogContext.mounted) return;
-                                  setDialogState(() => isSaving = false);
-                                  ScaffoldMessenger.of(
-                                    dialogContext,
-                                  ).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        'Could not save SMTP settings: $error',
-                                      ),
-                                    ),
-                                  );
-                                }
-                              },
+                            if (!dialogContext.mounted) return;
+                            Navigator.pop(dialogContext, true);
+                          } catch (error) {
+                            if (!dialogContext.mounted) return;
+                            setDialogState(() => isSaving = false);
+                            ScaffoldMessenger.of(dialogContext).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Could not save SMTP settings: $error',
+                                ),
+                              ),
+                            );
+                          }
+                        },
                   icon: isSaving
                       ? const SizedBox(
                           width: 16,
@@ -604,9 +613,9 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     );
 
     if (saved == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('SMTP settings saved')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('SMTP settings saved')));
     }
   }
 
@@ -627,7 +636,9 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
   @override
   Widget build(BuildContext context) {
     final activeUsers = users.where((user) => user.isActive).length;
-    final deletedWaybills = waybills.where((waybill) => waybill.isDeleted).length;
+    final deletedWaybills = waybills
+        .where((waybill) => waybill.isDeleted)
+        .length;
     final activeWaybills = waybills.length - deletedWaybills;
 
     Widget body;
@@ -1154,6 +1165,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
       'Driver',
       'Accounts',
       'Management',
+      'Manager',
     ];
 
     for (final role in roleOrder) {
@@ -1194,9 +1206,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         subtitle: Text('$activeCount active of ${roleUsers.length} users'),
-        children: [
-          for (final user in roleUsers) _buildUserTile(user),
-        ],
+        children: [for (final user in roleUsers) _buildUserTile(user)],
       ),
     );
   }
@@ -1219,9 +1229,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
           ),
           IconButton(
             onPressed: () => _toggleUserActive(user),
-            icon: Icon(
-              user.isActive ? Icons.block : Icons.check_circle,
-            ),
+            icon: Icon(user.isActive ? Icons.block : Icons.check_circle),
             tooltip: user.isActive ? 'Deactivate' : 'Reactivate',
           ),
         ],
@@ -1241,6 +1249,8 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
         return Icons.receipt_long;
       case 'Management':
         return Icons.insights;
+      case 'Manager':
+        return Icons.manage_accounts;
       default:
         return Icons.people;
     }
@@ -1378,9 +1388,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                   IconButton(
                     onPressed: () => _toggleWaybillDeleted(waybill),
                     icon: Icon(
-                      waybill.isDeleted
-                          ? Icons.restore
-                          : Icons.delete_outline,
+                      waybill.isDeleted ? Icons.restore : Icons.delete_outline,
                     ),
                     tooltip: waybill.isDeleted ? 'Restore' : 'Delete',
                   ),
@@ -1428,9 +1436,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                 rows: sourceWaybills.map((waybill) {
                   return DataRow(
                     color: WidgetStateProperty.resolveWith<Color?>(
-                      (_) => waybill.isDeleted
-                          ? const Color(0xFFFFF3F0)
-                          : null,
+                      (_) => waybill.isDeleted ? const Color(0xFFFFF3F0) : null,
                     ),
                     cells: [
                       DataCell(
@@ -1463,7 +1469,9 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                       ),
                       DataCell(
                         _SuperUserStatusChip(
-                          status: waybill.isDeleted ? 'Deleted' : waybill.status,
+                          status: waybill.isDeleted
+                              ? 'Deleted'
+                              : waybill.status,
                         ),
                       ),
                       DataCell(
@@ -1546,9 +1554,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                 const SizedBox(height: 8),
                 Text('Users: ${users.length}'),
                 const SizedBox(height: 8),
-                Text(
-                  _backupSourceText(),
-                ),
+                Text(_backupSourceText()),
               ],
             ),
           ),
@@ -1630,8 +1636,9 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
       case 'accounts':
         return 'Accounts';
       case 'management':
-      case 'manager':
         return 'Management';
+      case 'manager':
+        return 'Manager';
       case 'super_user':
       case 'super user':
       case 'admin':
