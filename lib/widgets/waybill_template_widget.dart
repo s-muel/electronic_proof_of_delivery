@@ -171,13 +171,21 @@ class WaybillTemplateWidget extends StatelessWidget {
                         ),
                         SizedBox(height: 4),
                         Text(
-                          'FAST • SAFE • SIMPLE',
+                          'Logistics I Ship Agency I Customs Brokerage I Freight Forwarding',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 10,
                             fontWeight: FontWeight.w600,
-                            letterSpacing: 1,
                           ),
                         ),
+                        // SizedBox(height: 2),
+                        // Text(
+                        //   'FAST - SAFE - SIMPLE',
+                        //   style: TextStyle(
+                        //     fontSize: 12,
+                        //     fontWeight: FontWeight.w600,
+                        //     letterSpacing: 1,
+                        //   ),
+                        // ),
                       ],
                     ),
                   ),
@@ -250,11 +258,7 @@ class WaybillTemplateWidget extends StatelessWidget {
           child: _box(label: 'P.O. NO.', value: waybill.poNumber, height: 58),
         ),
         Expanded(
-          child: _box(
-            label: 'SEAL NO.',
-            value: waybill.sealNumber,
-            height: 58,
-          ),
+          child: _box(label: 'SEAL NO.', value: waybill.sealNumber, height: 58),
         ),
         Expanded(
           child: _box(label: 'STATUS', value: waybill.status, height: 58),

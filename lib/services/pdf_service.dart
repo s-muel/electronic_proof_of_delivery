@@ -65,7 +65,9 @@ class PdfService {
                   driverSignatureImage: driverSignatureImage,
                   receiverStampImage: receiverStampImage,
                 ),
-                _buildFooter(),
+                _buildContactFooter(),
+                pw.Spacer(),
+                _buildConditionFooter(),
               ],
             ),
           );
@@ -163,6 +165,14 @@ class PdfService {
                         ),
                         pw.SizedBox(height: 4),
                         pw.Text(
+                          'Logistics I Ship Agency I Customs Brokerage I Freight Forwarding',
+                          style: pw.TextStyle(
+                            fontSize: 7.5,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
+                        pw.SizedBox(height: 2),
+                        pw.Text(
                           'FAST - SAFE - SIMPLE',
                           style: pw.TextStyle(
                             fontSize: 9,
@@ -238,11 +248,7 @@ class PdfService {
           child: _box(label: 'P.O. NO.', value: waybill.poNumber, height: 42),
         ),
         pw.Expanded(
-          child: _box(
-            label: 'SEAL NO.',
-            value: waybill.sealNumber,
-            height: 42,
-          ),
+          child: _box(label: 'SEAL NO.', value: waybill.sealNumber, height: 42),
         ),
         pw.Expanded(
           child: _box(label: 'STATUS', value: waybill.status, height: 42),
@@ -544,19 +550,32 @@ class PdfService {
     );
   }
 
-  static pw.Widget _buildFooter() {
+  static pw.Widget _buildContactFooter() {
     return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      padding: const pw.EdgeInsets.fromLTRB(6, 3, 6, 0),
+      child: pw.Center(
+        child: pw.Text(
+          'TEMA: P.O.Box CO 2673 Tema. Tel: 0303-200749/055 117 6353, Email: info@bajfreight.com, Website : www.bajfreight.com',
+          style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold),
+          textAlign: pw.TextAlign.center,
+        ),
+      ),
+    );
+  }
+
+  static pw.Widget _buildConditionFooter() {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.fromLTRB(6, 0, 6, 1),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
           pw.Text(
             'BAJFREIGHT STANDARD TRADING CONDITION APPLY',
-            style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold),
+            style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold),
           ),
           pw.Text(
             'BAJFREIGHT ACCEPTS NO RESPONSIBILITY FOR THE GOODS IF PACKING IS UNSUITABLE',
-            style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold),
+            style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold),
           ),
         ],
       ),
