@@ -24,6 +24,10 @@ class WaybillDetailsScreen extends StatefulWidget {
 class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
   late WaybillModel currentWaybill;
   bool isSharingPdf = false;
+  bool isDownloadingPdf = false;
+
+  bool get _hasRejectionNote =>
+      currentWaybill.invoiceRejectionReason.trim().isNotEmpty;
 
   @override
   void initState() {
@@ -32,17 +36,34 @@ class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
   }
 
   Future<void> downloadPdf() async {
-    final pdfBytes = await PdfService.generateWaybillPdf(
-      currentWaybill,
+    if (isDownloadingPdf) return;
+
+    setState(() => isDownloadingPdf = true);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    if (!mounted) return;
+
+    try {
+      final pdfBytes = await PdfService.generateWaybillPdf(
+        currentWaybill,
         receiverSignatureBytes: currentWaybill.receiverSignatureBytes,
         driverSignatureBytes: currentWaybill.driverSignatureBytes,
         receiverStampBytes: currentWaybill.receiverStampBytes,
       );
 
-    await Printing.layoutPdf(
-      name: _pdfFileName(currentWaybill.waybillNumber),
-      onLayout: (_) async => pdfBytes,
-    );
+      await Printing.layoutPdf(
+        name: _pdfFileName(currentWaybill.waybillNumber),
+        onLayout: (_) async => pdfBytes,
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to prepare this waybill PDF.')),
+      );
+    } finally {
+      if (mounted) setState(() => isDownloadingPdf = false);
+    }
   }
 
   Future<void> sharePdf() async {
@@ -126,13 +147,22 @@ class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: FilledButton.icon(
-              onPressed: downloadPdf,
+              onPressed: isDownloadingPdf ? null : downloadPdf,
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF16A34A),
                 foregroundColor: Colors.white,
               ),
-              icon: const Icon(Icons.picture_as_pdf, size: 18),
-              label: const Text('Download PDF'),
+              icon: isDownloadingPdf
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.picture_as_pdf, size: 18),
+              label: Text(isDownloadingPdf ? 'Preparing...' : 'Download PDF'),
             ),
           ),
           if (canEdit)
@@ -158,6 +188,17 @@ class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
               ),
             ),
             const SizedBox(height: 18),
+            if (_hasRejectionNote) ...[
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1100),
+                  child: _RejectionNoteCard(
+                    reason: currentWaybill.invoiceRejectionReason,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+            ],
             Center(
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -189,6 +230,55 @@ class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _RejectionNoteCard extends StatelessWidget {
+  final String reason;
+
+  const _RejectionNoteCard({required this.reason});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF1F2),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFFFA7A7)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.report_problem, color: Color(0xFFB42318)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Invoice Rejection Note',
+                  style: TextStyle(
+                    color: Color(0xFFB42318),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  reason.trim(),
+                  style: const TextStyle(
+                    color: Color(0xFF7A271A),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -268,7 +358,11 @@ class _WaybillHeaderCard extends StatelessWidget {
               ),
             ],
           ),
-          _HeaderInfo(icon: Icons.calendar_today, label: 'Date', value: waybill.date),
+          _HeaderInfo(
+            icon: Icons.calendar_today,
+            label: 'Date',
+            value: waybill.date,
+          ),
           _HeaderInfo(
             icon: Icons.business,
             label: 'Vendor',

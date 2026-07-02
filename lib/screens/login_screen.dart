@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/app_user_model.dart';
@@ -264,7 +263,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 14),
                   const Text(
-                    'v 0.1.8',
+                    'v 0.1.9',
                     style: TextStyle(
                       color: Colors.black38,
                       fontSize: 10,
