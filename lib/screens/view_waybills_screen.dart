@@ -1,14 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import '../models/waybill_model.dart';
 import '../services/firebase_auth_service.dart';
 import '../services/firestore_waybill_service.dart';
 import '../services/waybill_service.dart';
+import '../services/pdf_service.dart';
 
 import 'edit_waybill_screen.dart';
 import 'waybill_details_screen.dart';
 
 class ViewWaybillsScreen extends StatefulWidget {
-  const ViewWaybillsScreen({super.key});
+  final String title;
+  final bool showRejectedOnly;
+  final String? statusFilter;
+
+  const ViewWaybillsScreen({
+    super.key,
+    this.title = 'Waybill Register',
+    this.showRejectedOnly = false,
+    this.statusFilter,
+  });
 
   @override
   State<ViewWaybillsScreen> createState() => _ViewWaybillsScreenState();
@@ -18,8 +29,76 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
   List<WaybillModel> waybills = [];
   List<WaybillModel> allWaybills = [];
   List<WaybillModel> filteredWaybills = [];
+  final Set<String> _downloadingPdfWaybillNumbers = {};
 
   final searchController = TextEditingController();
+
+  bool get isRejectedView => widget.showRejectedOnly;
+
+  List<WaybillModel> _applyScreenFilter(List<WaybillModel> source) {
+    if (isRejectedView) {
+      return source
+          .where(
+            (waybill) =>
+                waybill.invoiceStatus == WaybillService.invoiceRejectedStatus,
+          )
+          .toList();
+    }
+
+    final statusFilter = widget.statusFilter;
+    if (statusFilter == null || statusFilter.trim().isEmpty) return source;
+
+    return source.where((waybill) => waybill.status == statusFilter).toList();
+  }
+
+  String _rejectionReasonFor(WaybillModel waybill) {
+    final reason = waybill.invoiceRejectionReason.trim();
+    return reason.isEmpty ? 'No rejection reason recorded' : reason;
+  }
+
+  String _pdfFileName(String waybillNumber) {
+    final safeWaybillNumber = waybillNumber.replaceAll(
+      RegExp(r'[^a-zA-Z0-9_-]'),
+      '_',
+    );
+    return 'Waybill_$safeWaybillNumber.pdf';
+  }
+
+  Future<void> downloadWaybillPdf(WaybillModel waybill) async {
+    if (_downloadingPdfWaybillNumbers.contains(waybill.waybillNumber)) return;
+
+    setState(() {
+      _downloadingPdfWaybillNumbers.add(waybill.waybillNumber);
+    });
+
+    try {
+      final pdfBytes = await PdfService.generateWaybillPdf(
+        waybill,
+        receiverSignatureBytes: waybill.receiverSignatureBytes,
+        driverSignatureBytes: waybill.driverSignatureBytes,
+        receiverStampBytes: waybill.receiverStampBytes,
+      );
+
+      await Printing.layoutPdf(
+        name: _pdfFileName(waybill.waybillNumber),
+        onLayout: (_) async => pdfBytes,
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not prepare the PDF. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _downloadingPdfWaybillNumbers.remove(waybill.waybillNumber);
+        });
+      }
+    }
+  }
 
   void editWaybill(int index, WaybillModel waybill) async {
     final result = await Navigator.push(
@@ -31,7 +110,7 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
 
     if (result == true) {
       setState(() {
-        allWaybills = _getCachedOfficerWaybills();
+        allWaybills = _applyScreenFilter(_getCachedOfficerWaybills());
       });
 
       filterWaybills(searchController.text);
@@ -47,7 +126,7 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
     );
 
     setState(() {
-      waybills = _getCachedOfficerWaybills();
+      waybills = _applyScreenFilter(_getCachedOfficerWaybills());
     });
   }
 
@@ -55,10 +134,15 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
     final userId = FirebaseAuthService.currentFirebaseUser?.uid ?? '';
 
     try {
-      allWaybills = await FirestoreWaybillService.getWaybillsCreatedBy(userId);
-      await WaybillService.replaceCachedWaybills(allWaybills);
+      final loadedWaybills = await FirestoreWaybillService.getWaybillsCreatedBy(
+        userId,
+      );
+      await WaybillService.replaceCachedWaybills(loadedWaybills);
+      allWaybills = _applyScreenFilter(loadedWaybills);
     } catch (_) {
-      allWaybills = WaybillService.getWaybillsCreatedBy(userId);
+      allWaybills = _applyScreenFilter(
+        WaybillService.getWaybillsCreatedBy(userId),
+      );
     }
 
     if (!mounted) return;
@@ -80,6 +164,10 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
               waybill.bajNumber.toLowerCase().contains(searchText) ||
               waybill.shippingVendor.toLowerCase().contains(searchText) ||
               waybill.consigneeReceiver.toLowerCase().contains(searchText) ||
+              waybill.invoiceRejectionReason.toLowerCase().contains(
+                searchText,
+              ) ||
+              waybill.invoiceStatus.toLowerCase().contains(searchText) ||
               waybill.status.toLowerCase().contains(searchText);
         }).toList();
       }
@@ -89,13 +177,13 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
   @override
   void initState() {
     super.initState();
-    waybills = _getCachedOfficerWaybills();
+    waybills = _applyScreenFilter(_getCachedOfficerWaybills());
     loadWaybills();
   }
 
   List<WaybillModel> _getCachedOfficerWaybills() {
     final userId = FirebaseAuthService.currentFirebaseUser?.uid ?? '';
-    return WaybillService.getWaybillsCreatedBy(userId);
+    return _applyScreenFilter(WaybillService.getWaybillsCreatedBy(userId));
   }
 
   @override
@@ -130,6 +218,12 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
         .length;
     final syncCount = filteredWaybills
         .where((waybill) => waybill.status == 'Pending Sync')
+        .length;
+    final rejectedCount = filteredWaybills
+        .where(
+          (waybill) =>
+              waybill.invoiceStatus == WaybillService.invoiceRejectedStatus,
+        )
         .length;
 
     return Scaffold(
@@ -194,21 +288,23 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
                         ),
                       ),
                       const SizedBox(width: 14),
-                      const Column(
+                      Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Waybill Register',
+                            widget.title,
                             style: TextStyle(
                               fontSize: 23,
                               fontWeight: FontWeight.bold,
                               color: Color(0xFF172033),
                             ),
                           ),
-                          SizedBox(height: 4),
+                          const SizedBox(height: 4),
                           Text(
-                            'Search, open, and manage created waybills.',
-                            style: TextStyle(color: Colors.black54),
+                            isRejectedView
+                                ? 'Review rejected waybills and rejection notes.'
+                                : 'Search, open, and manage created waybills.',
+                            style: const TextStyle(color: Colors.black54),
                           ),
                         ],
                       ),
@@ -241,6 +337,12 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
                         value: syncCount.toString(),
                         color: Colors.deepOrange,
                         icon: Icons.cloud_sync,
+                      ),
+                      _SummaryPill(
+                        label: 'Rejected',
+                        value: rejectedCount.toString(),
+                        color: Colors.red,
+                        icon: Icons.report_problem,
                       ),
                     ],
                   ),
@@ -313,6 +415,9 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
       itemCount: filteredWaybills.length,
       itemBuilder: (context, index) {
         final waybill = filteredWaybills[index];
+        final isDownloading = _downloadingPdfWaybillNumbers.contains(
+          waybill.waybillNumber,
+        );
 
         return Card(
           elevation: 0,
@@ -379,6 +484,23 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
                         icon: const Icon(Icons.visibility, color: Colors.blue),
                         onPressed: () => openWaybillDetails(index, waybill),
                       ),
+                      IconButton(
+                        tooltip: isDownloading
+                            ? 'Preparing PDF'
+                            : 'Download PDF',
+                        icon: isDownloading
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.download, color: Colors.blue),
+                        onPressed: isDownloading
+                            ? null
+                            : () => downloadWaybillPdf(waybill),
+                      ),
                       if (waybill.status == 'Pending Delivery')
                         IconButton(
                           tooltip: 'Edit',
@@ -416,22 +538,26 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
           scrollDirection: Axis.horizontal,
           child: SingleChildScrollView(
             child: DataTable(
-              headingRowColor: WidgetStateProperty.all(
-                const Color(0xFFEAF3FF),
-              ),
-              dataRowMinHeight: 58,
-              dataRowMaxHeight: 68,
+              headingRowColor: WidgetStateProperty.all(const Color(0xFFEAF3FF)),
+              dataRowMinHeight: isRejectedView ? 70 : 58,
+              dataRowMaxHeight: isRejectedView ? 92 : 68,
               columnSpacing: 28,
               horizontalMargin: 18,
-              columns: const [
-                DataColumn(label: Text('Waybill No.')),
-                DataColumn(label: Text('BAJ No.')),
-                DataColumn(label: Text('Date')),
-                DataColumn(label: Text('Shipping/Vendor')),
-                DataColumn(label: Text('Status')),
-                DataColumn(label: Text('Action')),
+              columns: [
+                const DataColumn(label: Text('Waybill No.')),
+                const DataColumn(label: Text('BAJ No.')),
+                const DataColumn(label: Text('Date')),
+                const DataColumn(label: Text('Shipping/Vendor')),
+                const DataColumn(label: Text('Status')),
+                if (isRejectedView)
+                  const DataColumn(label: Text('Rejection Reason')),
+                const DataColumn(label: Text('Action')),
               ],
               rows: filteredWaybills.map((waybill) {
+                final isDownloading = _downloadingPdfWaybillNumbers.contains(
+                  waybill.waybillNumber,
+                );
+
                 return DataRow(
                   cells: [
                     DataCell(
@@ -453,10 +579,27 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
                     ),
                     DataCell(
                       _StatusChip(
-                        status: waybill.status,
-                        color: getStatusColor(waybill.status),
+                        status: isRejectedView ? 'Rejected' : waybill.status,
+                        color: isRejectedView
+                            ? Colors.red
+                            : getStatusColor(waybill.status),
                       ),
                     ),
+                    if (isRejectedView)
+                      DataCell(
+                        SizedBox(
+                          width: 260,
+                          child: Text(
+                            _rejectionReasonFor(waybill),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFFB42318),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
                     DataCell(
                       Row(
                         mainAxisSize: MainAxisSize.min,
@@ -471,6 +614,24 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
                             },
                             icon: const Icon(Icons.visibility, size: 16),
                             label: const Text('View'),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton.tonalIcon(
+                            onPressed: isDownloading
+                                ? null
+                                : () => downloadWaybillPdf(waybill),
+                            icon: isDownloading
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.download, size: 16),
+                            label: Text(
+                              isDownloading ? 'Preparing' : 'Download',
+                            ),
                           ),
                           if (waybill.status == 'Pending Delivery') ...[
                             const SizedBox(width: 8),

@@ -7,6 +7,10 @@ class WaybillService {
   static const String pendingSyncStatus = 'Pending Sync';
   static const String deliveredStatus = 'Delivered';
   static const String invoicedStatus = 'Invoiced';
+  static const String invoiceNotSentStatus = 'Not Sent';
+  static const String invoiceSentStatus = 'Sent for Invoicing';
+  static const String invoiceAcceptedStatus = 'Accepted';
+  static const String invoiceRejectedStatus = 'Rejected';
 
   static late Box _box;
 
@@ -44,8 +48,8 @@ class WaybillService {
   static List<WaybillModel> getWaybillsAssignedToDriver(String driverId) {
     return _uniqueByWaybillNumber(
       getAllWaybills()
-        .where((waybill) => waybill.assignedDriverId == driverId)
-        .toList(),
+          .where((waybill) => waybill.assignedDriverId == driverId)
+          .toList(),
     );
   }
 
@@ -174,6 +178,28 @@ class WaybillService {
   static List<WaybillModel> getDeliveredWaybills() {
     return getAllWaybills()
         .where((waybill) => waybill.status == deliveredStatus)
+        .toList();
+  }
+
+  static List<WaybillModel> getReadyForInvoiceWaybills() {
+    return getAllWaybills()
+        .where(
+          (waybill) =>
+              waybill.status == deliveredStatus &&
+              waybill.invoiceStatus == invoiceNotSentStatus,
+        )
+        .toList();
+  }
+
+  static List<WaybillModel> getSentForInvoicingWaybills() {
+    return getAllWaybills()
+        .where((waybill) => waybill.invoiceStatus == invoiceSentStatus)
+        .toList();
+  }
+
+  static List<WaybillModel> getRejectedInvoiceWaybills() {
+    return getAllWaybills()
+        .where((waybill) => waybill.invoiceStatus == invoiceRejectedStatus)
         .toList();
   }
 
