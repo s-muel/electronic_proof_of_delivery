@@ -47,6 +47,11 @@ class WaybillModel {
   final String updatedAt;
   final String deliveredAt;
   final String invoicedAt;
+  final String invoiceStatus;
+  final String sentForInvoicingAt;
+  final String invoiceRejectedAt;
+  final String invoiceRejectionReason;
+  final String invoiceUpdatedBy;
   final bool isDeleted;
   final String deletedAt;
   final String deletedBy;
@@ -97,6 +102,11 @@ class WaybillModel {
     String? updatedAt,
     this.deliveredAt = '',
     this.invoicedAt = '',
+    this.invoiceStatus = 'Not Sent',
+    this.sentForInvoicingAt = '',
+    this.invoiceRejectedAt = '',
+    this.invoiceRejectionReason = '',
+    this.invoiceUpdatedBy = '',
     this.isDeleted = false,
     this.deletedAt = '',
     this.deletedBy = '',
@@ -149,6 +159,11 @@ class WaybillModel {
       'updatedAt': updatedAt,
       'deliveredAt': deliveredAt,
       'invoicedAt': invoicedAt,
+      'invoiceStatus': invoiceStatus,
+      'sentForInvoicingAt': sentForInvoicingAt,
+      'invoiceRejectedAt': invoiceRejectedAt,
+      'invoiceRejectionReason': invoiceRejectionReason,
+      'invoiceUpdatedBy': invoiceUpdatedBy,
       'isDeleted': isDeleted,
       'deletedAt': deletedAt,
       'deletedBy': deletedBy,
@@ -199,6 +214,11 @@ class WaybillModel {
       'updatedAt': updatedAt,
       'deliveredAt': deliveredAt,
       'invoicedAt': invoicedAt,
+      'invoiceStatus': invoiceStatus,
+      'sentForInvoicingAt': sentForInvoicingAt,
+      'invoiceRejectedAt': invoiceRejectedAt,
+      'invoiceRejectionReason': invoiceRejectionReason,
+      'invoiceUpdatedBy': invoiceUpdatedBy,
       'isDeleted': isDeleted,
       'deletedAt': deletedAt,
       'deletedBy': deletedBy,
@@ -255,6 +275,11 @@ class WaybillModel {
       updatedAt: map['updatedAt'],
       deliveredAt: map['deliveredAt'] ?? '',
       invoicedAt: map['invoicedAt'] ?? '',
+      invoiceStatus: map['invoiceStatus'] ?? _legacyInvoiceStatus(map),
+      sentForInvoicingAt: map['sentForInvoicingAt'] ?? '',
+      invoiceRejectedAt: map['invoiceRejectedAt'] ?? '',
+      invoiceRejectionReason: map['invoiceRejectionReason'] ?? '',
+      invoiceUpdatedBy: map['invoiceUpdatedBy'] ?? '',
       isDeleted: map['isDeleted'] ?? false,
       deletedAt: map['deletedAt'] ?? '',
       deletedBy: map['deletedBy'] ?? '',
@@ -307,6 +332,11 @@ class WaybillModel {
     String? updatedAt,
     String? deliveredAt,
     String? invoicedAt,
+    String? invoiceStatus,
+    String? sentForInvoicingAt,
+    String? invoiceRejectedAt,
+    String? invoiceRejectionReason,
+    String? invoiceUpdatedBy,
     bool? isDeleted,
     String? deletedAt,
     String? deletedBy,
@@ -358,6 +388,12 @@ class WaybillModel {
       updatedAt: updatedAt ?? this.updatedAt,
       deliveredAt: deliveredAt ?? this.deliveredAt,
       invoicedAt: invoicedAt ?? this.invoicedAt,
+      invoiceStatus: invoiceStatus ?? this.invoiceStatus,
+      sentForInvoicingAt: sentForInvoicingAt ?? this.sentForInvoicingAt,
+      invoiceRejectedAt: invoiceRejectedAt ?? this.invoiceRejectedAt,
+      invoiceRejectionReason:
+          invoiceRejectionReason ?? this.invoiceRejectionReason,
+      invoiceUpdatedBy: invoiceUpdatedBy ?? this.invoiceUpdatedBy,
       isDeleted: isDeleted ?? this.isDeleted,
       deletedAt: deletedAt ?? this.deletedAt,
       deletedBy: deletedBy ?? this.deletedBy,
@@ -383,5 +419,11 @@ class WaybillModel {
     }
 
     return null;
+  }
+
+  static String _legacyInvoiceStatus(Map<String, dynamic> map) {
+    final status = (map['status'] ?? '').toString();
+    if (status == 'Invoiced') return 'Accepted';
+    return 'Not Sent';
   }
 }
