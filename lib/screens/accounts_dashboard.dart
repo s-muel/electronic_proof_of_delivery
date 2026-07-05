@@ -1,5 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../models/waybill_model.dart';
+import '../models/waybill_stats_model.dart';
 import '../services/delivery_sync_service.dart';
 import '../services/firebase_auth_service.dart';
 import '../services/firestore_waybill_service.dart';
@@ -21,7 +23,23 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
   List<WaybillModel> sentForInvoicingWaybills = [];
   List<WaybillModel> rejectedInvoiceWaybills = [];
   List<WaybillModel> invoicedWaybills = [];
+  WaybillStatsModel? dashboardStats;
   bool isSyncing = false;
+  String accountName = '';
+
+  int get pendingDeliveryCount =>
+      dashboardStats?.pendingDelivery ?? pendingWaybills.length;
+
+  int get readyForInvoiceCount =>
+      dashboardStats?.readyForInvoice ?? deliveredWaybills.length;
+
+  int get sentForInvoicingCount =>
+      dashboardStats?.sentForInvoicing ?? sentForInvoicingWaybills.length;
+
+  int get rejectedInvoiceCount =>
+      dashboardStats?.rejected ?? rejectedInvoiceWaybills.length;
+
+  int get invoicedCount => dashboardStats?.invoiced ?? invoicedWaybills.length;
 
   @override
   void initState() {
@@ -42,8 +60,7 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
   Future<void> loadWaybills() async {
     if (shouldUseFirestoreData) {
       try {
-        final allWaybills = await FirestoreWaybillService.getAllWaybills();
-        await WaybillService.replaceCachedWaybills(allWaybills);
+        dashboardStats = await FirestoreWaybillService.getWaybillStats();
       } catch (error) {
         // Keep using local cached data when Firestore is unavailable.
         if (mounted) {
@@ -120,6 +137,8 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
     int? readyCount,
     int? invoicedCount,
     bool showFullSummary = false,
+    String? serverStatusFilter,
+    String? serverInvoiceStatusFilter,
   }) async {
     await Navigator.push(
       context,
@@ -132,6 +151,8 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
           readyCount: readyCount,
           invoicedCount: invoicedCount,
           showFullSummary: showFullSummary,
+          serverStatusFilter: serverStatusFilter,
+          serverInvoiceStatusFilter: serverInvoiceStatusFilter,
         ),
       ),
     );
@@ -339,31 +360,31 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
             children: [
               _SummaryCard(
                 title: 'Pending Delivery',
-                count: pendingWaybills.length,
+                count: pendingDeliveryCount,
                 icon: Icons.pending_actions,
                 color: Colors.orange,
               ),
               _SummaryCard(
                 title: 'Ready for Invoice',
-                count: deliveredWaybills.length,
+                count: readyForInvoiceCount,
                 icon: Icons.receipt_long,
                 color: Colors.blue,
               ),
               _SummaryCard(
                 title: 'Sent for Invoicing',
-                count: sentForInvoicingWaybills.length,
+                count: sentForInvoicingCount,
                 icon: Icons.send,
                 color: Colors.indigo,
               ),
               _SummaryCard(
                 title: 'Rejected',
-                count: rejectedInvoiceWaybills.length,
+                count: rejectedInvoiceCount,
                 icon: Icons.report_problem,
                 color: Colors.red,
               ),
               _SummaryCard(
                 title: 'Invoiced',
-                count: invoicedWaybills.length,
+                count: invoicedCount,
                 icon: Icons.done_all,
                 color: Colors.green,
               ),
@@ -510,7 +531,7 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${deliveredWaybills.length} Ready',
+                      '$readyForInvoiceCount Ready',
                       style: const TextStyle(
                         color: Color(0xFF0F5FB8),
                         fontSize: 18,
@@ -541,8 +562,10 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
       waybills: WaybillService.getReadyForInvoiceWaybills(),
       showMarkInvoicedButton: true,
       invoiceActionMode: 'markSent',
-      readyCount: WaybillService.getReadyForInvoiceWaybills().length,
-      invoicedCount: WaybillService.getInvoicedWaybills().length,
+      readyCount: dashboardStats?.readyForInvoice,
+      invoicedCount: dashboardStats?.invoiced,
+      serverStatusFilter: WaybillService.deliveredStatus,
+      serverInvoiceStatusFilter: WaybillService.invoiceNotSentStatus,
     );
   }
 
@@ -552,8 +575,9 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
       waybills: WaybillService.getSentForInvoicingWaybills(),
       showMarkInvoicedButton: true,
       invoiceActionMode: 'sentReview',
-      readyCount: WaybillService.getReadyForInvoiceWaybills().length,
-      invoicedCount: WaybillService.getInvoicedWaybills().length,
+      readyCount: dashboardStats?.readyForInvoice,
+      invoicedCount: dashboardStats?.invoiced,
+      serverInvoiceStatusFilter: WaybillService.invoiceSentStatus,
     );
   }
 
@@ -562,8 +586,9 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
       title: 'Invoiced Waybills',
       waybills: WaybillService.getInvoicedWaybills(),
       showMarkInvoicedButton: false,
-      readyCount: WaybillService.getReadyForInvoiceWaybills().length,
-      invoicedCount: WaybillService.getInvoicedWaybills().length,
+      readyCount: dashboardStats?.readyForInvoice,
+      invoicedCount: dashboardStats?.invoiced,
+      serverStatusFilter: WaybillService.invoicedStatus,
     );
   }
 
@@ -573,8 +598,9 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
       waybills: WaybillService.getRejectedInvoiceWaybills(),
       showMarkInvoicedButton: false,
       invoiceActionMode: 'rejected',
-      readyCount: WaybillService.getReadyForInvoiceWaybills().length,
-      invoicedCount: WaybillService.getInvoicedWaybills().length,
+      readyCount: dashboardStats?.readyForInvoice,
+      invoicedCount: dashboardStats?.invoiced,
+      serverInvoiceStatusFilter: WaybillService.invoiceRejectedStatus,
     );
   }
 
@@ -583,8 +609,8 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
       title: 'View All Waybills',
       waybills: WaybillService.getAllWaybills(),
       showMarkInvoicedButton: false,
-      readyCount: WaybillService.getReadyForInvoiceWaybills().length,
-      invoicedCount: WaybillService.getInvoicedWaybills().length,
+      readyCount: dashboardStats?.readyForInvoice,
+      invoicedCount: dashboardStats?.invoiced,
       showFullSummary: true,
     );
   }
@@ -671,6 +697,8 @@ class AccountsWaybillListScreen extends StatefulWidget {
   final int? readyCount;
   final int? invoicedCount;
   final bool showFullSummary;
+  final String? serverStatusFilter;
+  final String? serverInvoiceStatusFilter;
 
   const AccountsWaybillListScreen({
     super.key,
@@ -681,6 +709,8 @@ class AccountsWaybillListScreen extends StatefulWidget {
     this.readyCount,
     this.invoicedCount,
     this.showFullSummary = false,
+    this.serverStatusFilter,
+    this.serverInvoiceStatusFilter,
   });
 
   @override
@@ -689,16 +719,62 @@ class AccountsWaybillListScreen extends StatefulWidget {
 }
 
 class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
+  static const int _itemsPerPage = 25;
   late List<WaybillModel> allWaybills;
   late List<WaybillModel> filteredWaybills;
+  final Set<String> _downloadingPdfWaybillNumbers = {};
+  final List<DocumentSnapshot<Map<String, dynamic>>?> _pageCursors = [null];
+  final Map<int, List<WaybillModel>> _loadedPageCache = {};
+  final Map<int, bool> _pageHasMoreCache = {};
 
   final searchController = TextEditingController();
+  int _currentPage = 0;
+  bool _hasNextPage = false;
+  bool _isLoadingPage = false;
+  bool _usingLocalCache = false;
+  int _localTotalItems = 0;
+  int? _serverTotalWaybills;
+  WaybillStatsModel? _summaryStats;
+  List<WaybillModel>? _readyForInvoiceServerCache;
+
+  bool get _usesServerPagination =>
+      widget.showFullSummary ||
+      widget.serverStatusFilter != null ||
+      widget.serverInvoiceStatusFilter != null;
+
+  bool get _isReadyForInvoiceFilter =>
+      widget.serverStatusFilter == WaybillService.deliveredStatus &&
+      widget.serverInvoiceStatusFilter == WaybillService.invoiceNotSentStatus;
+
+  bool get shouldPaginate => _usesServerPagination
+      ? _currentPage > 0 || _hasNextPage
+      : filteredWaybills.length > _itemsPerPage;
+
+  int get totalPages => filteredWaybills.isEmpty
+      ? 1
+      : ((filteredWaybills.length - 1) ~/ _itemsPerPage) + 1;
+
+  List<WaybillModel> get visibleWaybills {
+    if (_usesServerPagination) return filteredWaybills;
+
+    final start = _currentPage * _itemsPerPage;
+    if (start >= filteredWaybills.length) return const [];
+
+    final end = (start + _itemsPerPage).clamp(0, filteredWaybills.length);
+    return filteredWaybills.sublist(start, end);
+  }
 
   @override
   void initState() {
     super.initState();
-    allWaybills = widget.waybills;
+    allWaybills = _usesServerPagination
+        ? widget.waybills.take(_itemsPerPage).toList()
+        : widget.waybills;
     filteredWaybills = allWaybills;
+    if (_usesServerPagination) {
+      _hasNextPage = widget.waybills.length >= _itemsPerPage;
+      loadWaybillPage();
+    }
   }
 
   @override
@@ -711,6 +787,8 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
     final searchText = query.toLowerCase().trim();
 
     setState(() {
+      if (!_usesServerPagination) _currentPage = 0;
+
       if (searchText.isEmpty) {
         filteredWaybills = allWaybills;
       } else {
@@ -725,6 +803,208 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
         }).toList();
       }
     });
+  }
+
+  int? _totalFromStats(WaybillStatsModel? stats) {
+    if (stats == null) return null;
+
+    if (widget.showFullSummary) return stats.total;
+
+    if (widget.serverStatusFilter == WaybillService.deliveredStatus &&
+        widget.serverInvoiceStatusFilter ==
+            WaybillService.invoiceNotSentStatus) {
+      return stats.readyForInvoice;
+    }
+
+    switch (widget.serverInvoiceStatusFilter) {
+      case WaybillService.invoiceSentStatus:
+        return stats.sentForInvoicing;
+      case WaybillService.invoiceRejectedStatus:
+        return stats.rejected;
+    }
+
+    switch (widget.serverStatusFilter) {
+      case WaybillService.invoicedStatus:
+        return stats.invoiced;
+      case WaybillService.deliveredStatus:
+        return stats.delivered;
+      case WaybillService.pendingDeliveryStatus:
+        return stats.pendingDelivery;
+      default:
+        return stats.total;
+    }
+  }
+
+  DateTime _readyForInvoiceSortDate(WaybillModel waybill) {
+    return DateTime.tryParse(waybill.deliveredAt) ??
+        DateTime.tryParse(waybill.updatedAt) ??
+        DateTime.tryParse(waybill.createdAt) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  Future<bool> _loadReadyForInvoicePage(int pageIndex) async {
+    final readyWaybills =
+        _readyForInvoiceServerCache ??
+        (await FirestoreWaybillService.getWaybillsByStatus(
+              WaybillService.deliveredStatus,
+            ))
+            .where(
+              (waybill) =>
+                  waybill.status == WaybillService.deliveredStatus &&
+                  waybill.invoiceStatus == WaybillService.invoiceNotSentStatus,
+            )
+            .toList();
+
+    readyWaybills.sort(
+      (a, b) =>
+          _readyForInvoiceSortDate(b).compareTo(_readyForInvoiceSortDate(a)),
+    );
+    _readyForInvoiceServerCache = readyWaybills;
+
+    final start = pageIndex * _itemsPerPage;
+    final end = (start + _itemsPerPage).clamp(0, readyWaybills.length);
+
+    allWaybills = start >= readyWaybills.length
+        ? const []
+        : readyWaybills.sublist(start, end);
+    _hasNextPage = end < readyWaybills.length;
+    _loadedPageCache[pageIndex] = allWaybills;
+    _pageHasMoreCache[pageIndex] = _hasNextPage;
+    _usingLocalCache = false;
+    _localTotalItems = 0;
+
+    if (_serverTotalWaybills == null) {
+      final stats = await FirestoreWaybillService.getWaybillStats();
+      _summaryStats = stats;
+      _serverTotalWaybills = _totalFromStats(stats) ?? readyWaybills.length;
+    }
+
+    return true;
+  }
+
+  Future<void> loadWaybillPage({int pageIndex = 0}) async {
+    if (!_usesServerPagination) return;
+
+    final cachedPage = _loadedPageCache[pageIndex];
+    if (cachedPage != null) {
+      allWaybills = cachedPage;
+      _hasNextPage = _pageHasMoreCache[pageIndex] ?? false;
+      _usingLocalCache = false;
+
+      if (!mounted) return;
+
+      setState(() {
+        _currentPage = pageIndex;
+        _isLoadingPage = false;
+      });
+      filterWaybills(searchController.text);
+      return;
+    }
+
+    setState(() => _isLoadingPage = true);
+
+    try {
+      if (_isReadyForInvoiceFilter) {
+        await _loadReadyForInvoicePage(pageIndex);
+      } else {
+        final page =
+            widget.serverStatusFilter != null &&
+                widget.serverInvoiceStatusFilter != null
+            ? await FirestoreWaybillService.getWaybillsByStatusAndInvoiceStatusPage(
+                widget.serverStatusFilter!,
+                widget.serverInvoiceStatusFilter!,
+                limit: _itemsPerPage,
+                startAfterDocument: _pageCursors[pageIndex],
+              )
+            : widget.serverStatusFilter != null
+            ? await FirestoreWaybillService.getWaybillsByStatusPage(
+                widget.serverStatusFilter!,
+                limit: _itemsPerPage,
+                startAfterDocument: _pageCursors[pageIndex],
+              )
+            : widget.serverInvoiceStatusFilter != null
+            ? await FirestoreWaybillService.getWaybillsByInvoiceStatusPage(
+                widget.serverInvoiceStatusFilter!,
+                limit: _itemsPerPage,
+                startAfterDocument: _pageCursors[pageIndex],
+              )
+            : await FirestoreWaybillService.getAllWaybillsPage(
+                limit: _itemsPerPage,
+                startAfterDocument: _pageCursors[pageIndex],
+              );
+        if (page.hasMore && _pageCursors.length == pageIndex + 1) {
+          _pageCursors.add(page.lastDocument);
+        }
+
+        allWaybills = _filterServerPageWaybills(page.waybills);
+        _hasNextPage = page.hasMore;
+        _loadedPageCache[pageIndex] = allWaybills;
+        _pageHasMoreCache[pageIndex] = page.hasMore;
+        _usingLocalCache = false;
+        _localTotalItems = 0;
+        if (_serverTotalWaybills == null) {
+          final stats = await FirestoreWaybillService.getWaybillStats();
+          _summaryStats = stats;
+          _serverTotalWaybills = _totalFromStats(stats);
+        }
+      }
+    } catch (error) {
+      debugPrint('Accounts waybill page load failed: $error');
+      _loadLocalPage(pageIndex);
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _currentPage = pageIndex;
+      _isLoadingPage = false;
+    });
+    filterWaybills(searchController.text);
+  }
+
+  List<WaybillModel> _filterServerPageWaybills(List<WaybillModel> waybills) {
+    if (_isReadyForInvoiceFilter) {
+      return waybills
+          .where(
+            (waybill) =>
+                waybill.status == WaybillService.deliveredStatus &&
+                waybill.invoiceStatus == WaybillService.invoiceNotSentStatus,
+          )
+          .toList();
+    }
+
+    return waybills;
+  }
+
+  void _loadLocalPage(int pageIndex) {
+    var cachedWaybills = WaybillService.getAllWaybills();
+
+    if (widget.serverStatusFilter != null) {
+      cachedWaybills = cachedWaybills
+          .where((waybill) => waybill.status == widget.serverStatusFilter)
+          .toList();
+    }
+
+    if (widget.serverInvoiceStatusFilter != null) {
+      cachedWaybills = cachedWaybills
+          .where(
+            (waybill) =>
+                waybill.invoiceStatus == widget.serverInvoiceStatusFilter,
+          )
+          .toList();
+    }
+
+    final start = pageIndex * _itemsPerPage;
+    final end = (start + _itemsPerPage).clamp(0, cachedWaybills.length);
+
+    allWaybills = start >= cachedWaybills.length
+        ? const []
+        : cachedWaybills.sublist(start, end);
+    _hasNextPage = end < cachedWaybills.length;
+    _loadedPageCache[pageIndex] = allWaybills;
+    _pageHasMoreCache[pageIndex] = _hasNextPage;
+    _usingLocalCache = true;
+    _localTotalItems = cachedWaybills.length;
   }
 
   Color getStatusColor(String status) {
@@ -851,6 +1131,10 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
       filteredWaybills.removeWhere(
         (item) => item.waybillNumber == updatedWaybill.waybillNumber,
       );
+
+      if (_currentPage >= totalPages) {
+        _currentPage = totalPages - 1;
+      }
     });
   }
 
@@ -1028,7 +1312,56 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
     final IconData pageIcon = widget.showMarkInvoicedButton
         ? Icons.receipt_long
         : Icons.done_all;
-
+    final stats = _summaryStats;
+    final pendingCount =
+        stats?.pendingDelivery ??
+        filteredWaybills
+            .where(
+              (waybill) =>
+                  waybill.status == WaybillService.pendingDeliveryStatus,
+            )
+            .length;
+    final deliveredCount =
+        stats?.delivered ??
+        filteredWaybills
+            .where(
+              (waybill) => waybill.status == WaybillService.deliveredStatus,
+            )
+            .length;
+    final totalWaybillCount =
+        stats?.total ?? (_serverTotalWaybills ?? filteredWaybills.length);
+    final readyCount =
+        _serverTotalWaybills ??
+        widget.readyCount ??
+        allWaybills
+            .where(
+              (waybill) =>
+                  waybill.status == WaybillService.deliveredStatus &&
+                  waybill.invoiceStatus == WaybillService.invoiceNotSentStatus,
+            )
+            .length;
+    final invoicedCount =
+        stats?.invoiced ??
+        filteredWaybills
+            .where((waybill) => waybill.status == WaybillService.invoicedStatus)
+            .length;
+    final displayInvoicedCount =
+        _serverTotalWaybills ??
+        (widget.showFullSummary
+            ? invoicedCount
+            : widget.invoicedCount ?? invoicedCount);
+    final secondarySummaryLabel = widget.invoiceActionMode == 'sentReview'
+        ? 'Sent'
+        : widget.showMarkInvoicedButton
+        ? 'Ready'
+        : 'Invoiced';
+    final secondarySummaryValue =
+        _serverTotalWaybills ??
+        (widget.invoiceActionMode == 'sentReview'
+            ? stats?.sentForInvoicing ?? filteredWaybills.length
+            : widget.showMarkInvoicedButton
+            ? readyCount
+            : displayInvoicedCount);
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
       body: Padding(
@@ -1109,22 +1442,48 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
                   Wrap(
                     spacing: 10,
                     runSpacing: 10,
-                    children: [
-                      _AccountsSummaryPill(
-                        label: 'Showing',
-                        value: filteredWaybills.length.toString(),
-                        color: pageColor,
-                        icon: Icons.filter_list,
-                      ),
-                      _AccountsSummaryPill(
-                        label: widget.showMarkInvoicedButton
-                            ? 'Ready'
-                            : 'Invoiced',
-                        value: allWaybills.length.toString(),
-                        color: pageColor,
-                        icon: pageIcon,
-                      ),
-                    ],
+                    children: widget.showFullSummary
+                        ? [
+                            _AccountsSummaryPill(
+                              label: 'Total',
+                              value: totalWaybillCount.toString(),
+                              color: Colors.blue,
+                              icon: Icons.list_alt,
+                            ),
+                            _AccountsSummaryPill(
+                              label: 'Pending',
+                              value: pendingCount.toString(),
+                              color: Colors.orange,
+                              icon: Icons.schedule,
+                            ),
+                            _AccountsSummaryPill(
+                              label: 'Delivered',
+                              value: deliveredCount.toString(),
+                              color: Colors.green,
+                              icon: Icons.check_circle,
+                            ),
+                            _AccountsSummaryPill(
+                              label: 'Invoiced',
+                              value: displayInvoicedCount.toString(),
+                              color: Colors.blue,
+                              icon: Icons.receipt_long,
+                            ),
+                          ]
+                        : [
+                            _AccountsSummaryPill(
+                              label: 'Showing',
+                              value: visibleWaybills.length.toString(),
+                              color: pageColor,
+                              icon: Icons.filter_list,
+                            ),
+                            if (widget.invoiceActionMode != 'rejected')
+                              _AccountsSummaryPill(
+                                label: secondarySummaryLabel,
+                                value: secondarySummaryValue.toString(),
+                                color: pageColor,
+                                icon: pageIcon,
+                              ),
+                          ],
                   ),
                 ],
               ),
@@ -1175,11 +1534,32 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
             const SizedBox(height: 20),
 
             Expanded(
-              child: filteredWaybills.isEmpty
+              child: _isLoadingPage && filteredWaybills.isEmpty
+                  ? const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 12),
+                          Text('Loading waybills...'),
+                        ],
+                      ),
+                    )
+                  : filteredWaybills.isEmpty
                   ? _buildEmptyState(pageColor)
-                  : isWideScreen
-                  ? _buildTableView()
-                  : _buildListView(),
+                  : Column(
+                      children: [
+                        Expanded(
+                          child: isWideScreen
+                              ? _buildTableView()
+                              : _buildListView(),
+                        ),
+                        if (shouldPaginate) ...[
+                          const SizedBox(height: 12),
+                          _buildPaginationControls(),
+                        ],
+                      ],
+                    ),
             ),
           ],
         ),
@@ -1188,10 +1568,12 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
   }
 
   Widget _buildListView() {
+    final pageWaybills = visibleWaybills;
+
     return ListView.builder(
-      itemCount: filteredWaybills.length,
+      itemCount: pageWaybills.length,
       itemBuilder: (context, index) {
-        final waybill = filteredWaybills[index];
+        final waybill = pageWaybills[index];
 
         final originalIndex = WaybillService.getIndexByWaybillNumber(
           waybill.waybillNumber,
@@ -1470,7 +1852,7 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
                     ),
                   ),
                 ],
-                rows: filteredWaybills.map((waybill) {
+                rows: visibleWaybills.map((waybill) {
                   final originalIndex = WaybillService.getIndexByWaybillNumber(
                     waybill.waybillNumber,
                   );
@@ -1649,6 +2031,75 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPaginationControls() {
+    final start = (_currentPage * _itemsPerPage) + 1;
+    final end = _usesServerPagination
+        ? start + visibleWaybills.length - 1
+        : ((_currentPage * _itemsPerPage) + visibleWaybills.length).clamp(
+            0,
+            filteredWaybills.length,
+          );
+    final showingText = _usesServerPagination
+        ? _usingLocalCache && _localTotalItems > 0
+              ? 'Showing $start-$end of $_localTotalItems cached'
+              : _serverTotalWaybills != null
+              ? 'Showing $start-$end of $_serverTotalWaybills'
+              : 'Showing $start-$end'
+        : 'Showing $start-$end of ${filteredWaybills.length}';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFDDE8F6)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              _isLoadingPage ? 'Loading waybills...' : showingText,
+              style: const TextStyle(
+                color: Color(0xFF5B718C),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          IconButton.filledTonal(
+            tooltip: 'Previous page',
+            onPressed: _currentPage == 0 || _isLoadingPage
+                ? null
+                : _usesServerPagination
+                ? () => loadWaybillPage(pageIndex: _currentPage - 1)
+                : () => setState(() => _currentPage--),
+            icon: const Icon(Icons.chevron_left),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            _usesServerPagination
+                ? 'Page ${_currentPage + 1}'
+                : 'Page ${_currentPage + 1} of $totalPages',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(width: 8),
+          IconButton.filledTonal(
+            tooltip: 'Next page',
+            onPressed:
+                _isLoadingPage ||
+                    (_usesServerPagination
+                        ? !_hasNextPage
+                        : _currentPage >= totalPages - 1)
+                ? null
+                : _usesServerPagination
+                ? () => loadWaybillPage(pageIndex: _currentPage + 1)
+                : () => setState(() => _currentPage++),
+            icon: const Icon(Icons.chevron_right),
+          ),
+        ],
       ),
     );
   }
