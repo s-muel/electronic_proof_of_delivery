@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import '../models/waybill_model.dart';
@@ -26,29 +29,65 @@ class ViewWaybillsScreen extends StatefulWidget {
 }
 
 class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
+  static const int _itemsPerPage = 25;
   List<WaybillModel> waybills = [];
   List<WaybillModel> allWaybills = [];
   List<WaybillModel> filteredWaybills = [];
   final Set<String> _downloadingPdfWaybillNumbers = {};
+  final List<DocumentSnapshot<Map<String, dynamic>>?> _pageCursors = [null];
+  final Map<int, List<WaybillModel>> _loadedPageCache = {};
+  final Map<int, bool> _pageHasMoreCache = {};
 
   final searchController = TextEditingController();
+  int _currentPage = 0;
+  bool _hasNextPage = false;
+  bool _isLoadingPage = true;
+  bool _usingLocalCache = false;
+  int _localTotalItems = 0;
+  List<WaybillModel>? _summaryWaybills;
+
+  bool get shouldPaginate => _currentPage > 0 || _hasNextPage;
+
+  List<WaybillModel> get visibleWaybills => filteredWaybills;
 
   bool get isRejectedView => widget.showRejectedOnly;
 
+  bool _isRejectedWaybill(WaybillModel waybill) =>
+      waybill.invoiceStatus == WaybillService.invoiceRejectedStatus;
+
+  bool get _statusViewShouldExcludeRejected =>
+      widget.statusFilter == WaybillService.deliveredStatus ||
+      widget.statusFilter == WaybillService.invoicedStatus;
+
+  bool _canEditWaybill(WaybillModel waybill) =>
+      waybill.status == WaybillService.pendingDeliveryStatus ||
+      _isRejectedWaybill(waybill);
+
+  String _displayStatusFor(WaybillModel waybill) =>
+      _isRejectedWaybill(waybill) ? 'Rejected' : waybill.status;
+
+  Color _displayStatusColorFor(WaybillModel waybill) =>
+      _isRejectedWaybill(waybill) ? Colors.red : getStatusColor(waybill.status);
+
   List<WaybillModel> _applyScreenFilter(List<WaybillModel> source) {
     if (isRejectedView) {
-      return source
-          .where(
-            (waybill) =>
-                waybill.invoiceStatus == WaybillService.invoiceRejectedStatus,
-          )
-          .toList();
+      return source.where((waybill) => _isRejectedWaybill(waybill)).toList();
     }
 
     final statusFilter = widget.statusFilter;
     if (statusFilter == null || statusFilter.trim().isEmpty) return source;
 
-    return source.where((waybill) => waybill.status == statusFilter).toList();
+    final statusWaybills = source
+        .where((waybill) => waybill.status == statusFilter)
+        .toList();
+
+    if (_statusViewShouldExcludeRejected) {
+      return statusWaybills
+          .where((waybill) => !_isRejectedWaybill(waybill))
+          .toList();
+    }
+
+    return statusWaybills;
   }
 
   String _rejectionReasonFor(WaybillModel waybill) {
@@ -109,11 +148,7 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
     );
 
     if (result == true) {
-      setState(() {
-        allWaybills = _applyScreenFilter(_getCachedOfficerWaybills());
-      });
-
-      filterWaybills(searchController.text);
+      await loadWaybills(pageIndex: _currentPage);
     }
   }
 
@@ -125,31 +160,99 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
       ),
     );
 
-    setState(() {
-      waybills = _applyScreenFilter(_getCachedOfficerWaybills());
-    });
+    await loadWaybills(pageIndex: _currentPage);
   }
 
-  Future<void> loadWaybills() async {
+  Future<void> _loadSummaryWaybills(String userId) async {
+    try {
+      final officerWaybills =
+          await FirestoreWaybillService.getWaybillsCreatedBy(userId);
+
+      if (!mounted) return;
+      setState(() {
+        _summaryWaybills = _applyScreenFilter(officerWaybills);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _summaryWaybills = _applyScreenFilter(
+          WaybillService.getWaybillsCreatedBy(userId),
+        );
+      });
+    }
+  }
+
+  Future<void> loadWaybills({int pageIndex = 0}) async {
     final userId = FirebaseAuthService.currentFirebaseUser?.uid ?? '';
+    if (_summaryWaybills == null) {
+      unawaited(_loadSummaryWaybills(userId));
+    }
+
+    final cachedPage = _loadedPageCache[pageIndex];
+    if (cachedPage != null) {
+      allWaybills = cachedPage;
+      _hasNextPage = _pageHasMoreCache[pageIndex] ?? false;
+      _usingLocalCache = false;
+
+      if (!mounted) return;
+
+      setState(() {
+        _currentPage = pageIndex;
+        _isLoadingPage = false;
+      });
+      filterWaybills(searchController.text);
+      return;
+    }
+
+    setState(() => _isLoadingPage = true);
 
     try {
-      final loadedWaybills = await FirestoreWaybillService.getWaybillsCreatedBy(
+      final page = await FirestoreWaybillService.getWaybillsCreatedByPage(
         userId,
+        limit: _itemsPerPage,
+        startAfterDocument: _pageCursors[pageIndex],
+        statusFilter: widget.statusFilter,
+        rejectedOnly: isRejectedView,
       );
-      await WaybillService.replaceCachedWaybills(loadedWaybills);
-      allWaybills = _applyScreenFilter(loadedWaybills);
+
+      if (page.hasMore && _pageCursors.length == pageIndex + 1) {
+        _pageCursors.add(page.lastDocument);
+      }
+
+      allWaybills = _applyScreenFilter(page.waybills);
+      _hasNextPage = page.hasMore;
+      _loadedPageCache[pageIndex] = allWaybills;
+      _pageHasMoreCache[pageIndex] = page.hasMore;
+      _usingLocalCache = false;
+      _localTotalItems = 0;
     } catch (_) {
-      allWaybills = _applyScreenFilter(
-        WaybillService.getWaybillsCreatedBy(userId),
-      );
+      _loadLocalPage(userId, pageIndex);
     }
 
     if (!mounted) return;
 
     setState(() {
-      filteredWaybills = allWaybills;
+      _currentPage = pageIndex;
+      _isLoadingPage = false;
     });
+    filterWaybills(searchController.text);
+  }
+
+  void _loadLocalPage(String userId, int pageIndex) {
+    final cachedWaybills = _applyScreenFilter(
+      WaybillService.getWaybillsCreatedBy(userId),
+    );
+    final start = pageIndex * _itemsPerPage;
+    final end = (start + _itemsPerPage).clamp(0, cachedWaybills.length);
+
+    allWaybills = start >= cachedWaybills.length
+        ? const []
+        : cachedWaybills.sublist(start, end);
+    _hasNextPage = end < cachedWaybills.length;
+    _loadedPageCache[pageIndex] = allWaybills;
+    _pageHasMoreCache[pageIndex] = _hasNextPage;
+    _usingLocalCache = true;
+    _localTotalItems = cachedWaybills.length;
   }
 
   void filterWaybills(String query) {
@@ -177,13 +280,20 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
   @override
   void initState() {
     super.initState();
-    waybills = _applyScreenFilter(_getCachedOfficerWaybills());
+    waybills = _loadInitialCachedPage();
+    allWaybills = waybills;
+    filteredWaybills = waybills;
     loadWaybills();
   }
 
-  List<WaybillModel> _getCachedOfficerWaybills() {
+  List<WaybillModel> _loadInitialCachedPage() {
     final userId = FirebaseAuthService.currentFirebaseUser?.uid ?? '';
-    return _applyScreenFilter(WaybillService.getWaybillsCreatedBy(userId));
+    final cachedWaybills = _applyScreenFilter(
+      WaybillService.getWaybillsCreatedBy(userId),
+    );
+    _localTotalItems = cachedWaybills.length;
+    _hasNextPage = cachedWaybills.length > _itemsPerPage;
+    return cachedWaybills.take(_itemsPerPage).toList();
   }
 
   @override
@@ -210,25 +320,39 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
   @override
   Widget build(BuildContext context) {
     final isWideScreen = MediaQuery.of(context).size.width > 800;
-    final pendingCount = filteredWaybills
-        .where((waybill) => waybill.status == 'Pending Delivery')
-        .length;
-    final deliveredCount = filteredWaybills
-        .where((waybill) => waybill.status == 'Delivered')
-        .length;
-    final invoicedCount = filteredWaybills
-        .where((waybill) => waybill.status == 'Invoiced')
-        .length;
-    final syncCount = filteredWaybills
-        .where((waybill) => waybill.status == 'Pending Sync')
-        .length;
-    final rejectedCount = filteredWaybills
+    final summarySource =
+        _summaryWaybills ?? _applyScreenFilter(filteredWaybills);
+    final pendingCount = summarySource
         .where(
           (waybill) =>
-              waybill.invoiceStatus == WaybillService.invoiceRejectedStatus,
+              waybill.status == WaybillService.pendingDeliveryStatus &&
+              !_isRejectedWaybill(waybill),
         )
         .length;
-
+    final rejectedCount = summarySource
+        .where((waybill) => _isRejectedWaybill(waybill))
+        .length;
+    final deliveredCount = summarySource
+        .where(
+          (waybill) =>
+              waybill.status == WaybillService.deliveredStatus &&
+              !_isRejectedWaybill(waybill),
+        )
+        .length;
+    final invoicedCount = summarySource
+        .where(
+          (waybill) =>
+              waybill.status == WaybillService.invoicedStatus &&
+              !_isRejectedWaybill(waybill),
+        )
+        .length;
+    final syncCount = summarySource
+        .where(
+          (waybill) =>
+              waybill.status == 'Pending Sync' && !_isRejectedWaybill(waybill),
+        )
+        .length;
+    final totalCount = summarySource.length;
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
       body: Padding(
@@ -319,7 +443,7 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
                     children: [
                       _SummaryPill(
                         label: 'Total',
-                        value: filteredWaybills.length.toString(),
+                        value: totalCount.toString(),
                         color: Colors.blue,
                         icon: Icons.list_alt,
                       ),
@@ -407,11 +531,23 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
             const SizedBox(height: 16),
 
             Expanded(
-              child: filteredWaybills.isEmpty
+              child: _isLoadingPage && filteredWaybills.isEmpty
+                  ? _buildLoadingState()
+                  : filteredWaybills.isEmpty
                   ? _buildEmptyState()
-                  : isWideScreen
-                  ? _buildTableView()
-                  : _buildListView(),
+                  : Column(
+                      children: [
+                        Expanded(
+                          child: isWideScreen
+                              ? _buildTableView()
+                              : _buildListView(),
+                        ),
+                        if (shouldPaginate) ...[
+                          const SizedBox(height: 12),
+                          _buildPaginationControls(),
+                        ],
+                      ],
+                    ),
             ),
           ],
         ),
@@ -420,10 +556,12 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
   }
 
   Widget _buildListView() {
+    final pageWaybills = visibleWaybills;
+
     return ListView.builder(
-      itemCount: filteredWaybills.length,
+      itemCount: pageWaybills.length,
       itemBuilder: (context, index) {
-        final waybill = filteredWaybills[index];
+        final waybill = pageWaybills[index];
         final isDownloading = _downloadingPdfWaybillNumbers.contains(
           waybill.waybillNumber,
         );
@@ -480,8 +618,8 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
                         ),
                         const SizedBox(height: 10),
                         _StatusChip(
-                          status: waybill.status,
-                          color: getStatusColor(waybill.status),
+                          status: _displayStatusFor(waybill),
+                          color: _displayStatusColorFor(waybill),
                         ),
                       ],
                     ),
@@ -510,7 +648,7 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
                             ? null
                             : () => downloadWaybillPdf(waybill),
                       ),
-                      if (waybill.status == 'Pending Delivery')
+                      if (_canEditWaybill(waybill))
                         IconButton(
                           tooltip: 'Edit',
                           icon: const Icon(Icons.edit, color: Colors.blueGrey),
@@ -562,7 +700,7 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
                   const DataColumn(label: Text('Rejection Reason')),
                 const DataColumn(label: Text('Action')),
               ],
-              rows: filteredWaybills.map((waybill) {
+              rows: visibleWaybills.map((waybill) {
                 final isDownloading = _downloadingPdfWaybillNumbers.contains(
                   waybill.waybillNumber,
                 );
@@ -588,10 +726,8 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
                     ),
                     DataCell(
                       _StatusChip(
-                        status: isRejectedView ? 'Rejected' : waybill.status,
-                        color: isRejectedView
-                            ? Colors.red
-                            : getStatusColor(waybill.status),
+                        status: _displayStatusFor(waybill),
+                        color: _displayStatusColorFor(waybill),
                       ),
                     ),
                     if (isRejectedView)
@@ -642,7 +778,7 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
                               isDownloading ? 'Preparing' : 'Download',
                             ),
                           ),
-                          if (waybill.status == 'Pending Delivery') ...[
+                          if (_canEditWaybill(waybill)) ...[
                             const SizedBox(width: 8),
                             OutlinedButton.icon(
                               onPressed: () {
@@ -665,6 +801,69 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPaginationControls() {
+    final start = (_currentPage * _itemsPerPage) + 1;
+    final end = start + visibleWaybills.length - 1;
+    final showingText = _usingLocalCache && _localTotalItems > 0
+        ? 'Showing $start-$end of $_localTotalItems cached'
+        : 'Showing $start-$end';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFDDE8F6)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              _isLoadingPage ? 'Loading waybills...' : showingText,
+              style: const TextStyle(
+                color: Color(0xFF5B718C),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          IconButton.filledTonal(
+            tooltip: 'Previous page',
+            onPressed: _isLoadingPage || _currentPage == 0
+                ? null
+                : () => loadWaybills(pageIndex: _currentPage - 1),
+            icon: const Icon(Icons.chevron_left),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Page ${_currentPage + 1}',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(width: 8),
+          IconButton.filledTonal(
+            tooltip: 'Next page',
+            onPressed: _isLoadingPage || !_hasNextPage
+                ? null
+                : () => loadWaybills(pageIndex: _currentPage + 1),
+            icon: const Icon(Icons.chevron_right),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircularProgressIndicator(),
+          SizedBox(height: 12),
+          Text('Loading waybills...'),
+        ],
       ),
     );
   }

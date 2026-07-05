@@ -23,6 +23,7 @@ class EditWaybillScreen extends StatefulWidget {
 class _EditWaybillScreenState extends State<EditWaybillScreen> {
   final _formKey = GlobalKey<FormState>();
   bool isLoadingDrivers = false;
+  bool isUpdatingWaybill = false;
   List<AppUserModel> drivers = [];
   AppUserModel? selectedDriver;
 
@@ -139,7 +140,12 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
     super.dispose();
   }
 
-  Future<void> updateWaybill() async {
+  bool get isRejectedWaybill =>
+      widget.waybill.invoiceStatus == WaybillService.invoiceRejectedStatus;
+
+  Future<void> updateWaybill({bool resubmitToAccounts = false}) async {
+    if (isUpdatingWaybill) return;
+
     if (_formKey.currentState!.validate()) {
       if (selectedDriver == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -150,11 +156,13 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
         return;
       }
 
+      setState(() => isUpdatingWaybill = true);
+
       final now = DateTime.now().toIso8601String();
       final assignedDriver = selectedDriver;
       final updatedWaybill = widget.waybill.copyWith(
         bajNumber: bajNumberController.text.trim(),
-        waybillNumber: waybillNumberController.text.trim(),
+        waybillNumber: widget.waybill.waybillNumber,
         date: dateController.text.trim(),
         poNumber: poNumberController.text.trim(),
         sealNumber: sealNumberController.text.trim(),
@@ -173,6 +181,21 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
         hazardousCargoType: hazardousCargoTypeController.text.trim(),
         unNumber: unNumberController.text.trim(),
         tremcard: tremcardController.text.trim(),
+        status: resubmitToAccounts
+            ? WaybillService.deliveredStatus
+            : widget.waybill.status,
+        invoiceStatus: resubmitToAccounts
+            ? WaybillService.invoiceNotSentStatus
+            : widget.waybill.invoiceStatus,
+        invoiceRejectedAt: resubmitToAccounts
+            ? ''
+            : widget.waybill.invoiceRejectedAt,
+        invoiceRejectionReason: resubmitToAccounts
+            ? ''
+            : widget.waybill.invoiceRejectionReason,
+        invoiceUpdatedBy: resubmitToAccounts
+            ? widget.waybill.createdByUserId
+            : widget.waybill.invoiceUpdatedBy,
         updatedAt: now,
       );
 
@@ -190,16 +213,38 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
               ),
             ),
           );
-          Navigator.pop(context, true);
+          if (resubmitToAccounts) {
+            Navigator.popUntil(context, (route) => route.isFirst);
+          } else {
+            if (resubmitToAccounts) {
+              Navigator.popUntil(context, (route) => route.isFirst);
+            } else {
+              Navigator.pop(context, true);
+            }
+          }
           return;
         }
       }
 
+      if (!mounted) return;
+
+      setState(() => isUpdatingWaybill = false);
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Waybill updated successfully')),
+        SnackBar(
+          content: Text(
+            resubmitToAccounts
+                ? 'Waybill updated and resubmitted to Accounts'
+                : 'Waybill updated successfully',
+          ),
+        ),
       );
 
-      Navigator.pop(context, true);
+      if (resubmitToAccounts) {
+        Navigator.popUntil(context, (route) => route.isFirst);
+      } else {
+        Navigator.pop(context, true);
+      }
     }
   }
 
@@ -572,7 +617,9 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
                         child: buildTextField(
                           label: 'Waybill Number',
                           controller: waybillNumberController,
-                          icon: Icons.receipt_long,
+                          readOnly: true,
+                          helperText: 'Waybill number cannot be changed',
+                          icon: Icons.lock_outline,
                         ),
                       ),
                       _fieldBox(
@@ -720,21 +767,74 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
                   const SizedBox(height: 24),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: SizedBox(
-                      width: isWideScreen ? 260 : double.infinity,
-                      height: 50,
-                      child: FilledButton.icon(
-                        onPressed: updateWaybill,
-                        icon: const Icon(Icons.save),
-                        label: const Text('Update Waybill'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
+                    child: Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      alignment: WrapAlignment.end,
+                      children: [
+                        SizedBox(
+                          width: isWideScreen ? 220 : double.infinity,
+                          height: 50,
+                          child: FilledButton.icon(
+                            onPressed: isUpdatingWaybill ? null : updateWaybill,
+                            icon: isUpdatingWaybill
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.save),
+                            label: Text(
+                              isUpdatingWaybill
+                                  ? 'Updating...'
+                                  : 'Update Waybill',
+                            ),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        if (isRejectedWaybill)
+                          SizedBox(
+                            width: isWideScreen ? 260 : double.infinity,
+                            height: 50,
+                            child: FilledButton.icon(
+                              onPressed: isUpdatingWaybill
+                                  ? null
+                                  : () =>
+                                        updateWaybill(resubmitToAccounts: true),
+                              icon: isUpdatingWaybill
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(Icons.send),
+                              label: Text(
+                                isUpdatingWaybill
+                                    ? 'Updating...'
+                                    : 'Update & Resubmit',
+                              ),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ],

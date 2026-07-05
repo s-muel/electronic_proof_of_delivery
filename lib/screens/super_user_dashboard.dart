@@ -32,6 +32,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
   static const Color _primary = Color(0xFF5E3BDB);
   static const Color _onSurface = Color(0xFF1A1A2A);
   static const Color _onSurfaceVariant = Color(0xFF5E5A6B);
+  static const int _waybillItemsPerPage = 25;
 
   final userSearchController = TextEditingController();
   final waybillSearchController = TextEditingController();
@@ -39,7 +40,9 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
   List<WaybillModel> waybills = [];
   String? selectedPage;
   String? openingPage;
+  int _waybillCurrentPage = 0;
   bool isLoading = true;
+  bool isRebuildingStats = false;
 
   @override
   void initState() {
@@ -77,6 +80,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     setState(() {
       users = loadedUsers;
       waybills = loadedWaybills;
+      _waybillCurrentPage = 0;
       isLoading = false;
     });
   }
@@ -230,9 +234,12 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                           ),
                           validator: (value) {
                             final email = value?.trim() ?? '';
-                            if (email.isEmpty) return 'Email is required';
-                            if (!email.contains('@'))
+                            if (email.isEmpty) {
+                              return 'Email is required';
+                            }
+                            if (!email.contains('@')) {
                               return 'Enter a valid email';
+                            }
                             return null;
                           },
                         ),
@@ -265,7 +272,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
-                          value: selectedRole,
+                          initialValue: selectedRole,
                           decoration: const InputDecoration(
                             labelText: 'Role',
                             border: OutlineInputBorder(),
@@ -423,6 +430,34 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     );
   }
 
+  Future<void> _rebuildWaybillStats() async {
+    if (isRebuildingStats) return;
+
+    setState(() => isRebuildingStats = true);
+
+    try {
+      final stats = await FirestoreWaybillService.rebuildWaybillStats();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Waybill stats rebuilt: ${stats.total} total waybills'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not rebuild stats: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => isRebuildingStats = false);
+      }
+    }
+  }
+
   Future<void> _showSmtpSettingsDialog() async {
     final settingsService = SettingsService();
     try {
@@ -512,10 +547,12 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                           ),
                           validator: (value) {
                             final email = value?.trim() ?? '';
-                            if (email.isEmpty)
+                            if (email.isEmpty) {
                               return 'Sender email is required';
-                            if (!email.contains('@'))
+                            }
+                            if (!email.contains('@')) {
                               return 'Enter a valid email';
+                            }
                             return null;
                           },
                         ),
@@ -1105,7 +1142,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
   Widget _buildUserSearchBox() {
     return TextField(
       controller: userSearchController,
-      onChanged: (_) => setState(() {}),
+      onChanged: (_) => setState(() => _waybillCurrentPage = 0),
       decoration: InputDecoration(
         hintText: 'Search users by name, email or role',
         prefixIcon: const Icon(Icons.search),
@@ -1258,6 +1295,21 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
 
   Widget _buildWaybillsTab(int deletedWaybills) {
     final filteredWaybills = _filteredWaybills();
+    final totalPages = filteredWaybills.isEmpty
+        ? 1
+        : ((filteredWaybills.length - 1) ~/ _waybillItemsPerPage) + 1;
+
+    if (_waybillCurrentPage >= totalPages) {
+      _waybillCurrentPage = totalPages - 1;
+    }
+
+    final pageStart = _waybillCurrentPage * _waybillItemsPerPage;
+    final pageEnd = (pageStart + _waybillItemsPerPage).clamp(
+      0,
+      filteredWaybills.length,
+    );
+    final visibleWaybills = filteredWaybills.sublist(pageStart, pageEnd);
+    final shouldPaginate = filteredWaybills.length > _waybillItemsPerPage;
 
     return RefreshIndicator(
       onRefresh: loadAdminData,
@@ -1294,11 +1346,75 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
             LayoutBuilder(
               builder: (context, constraints) {
                 final isWide = constraints.maxWidth >= 820;
-                return isWide
-                    ? _buildWaybillTable(filteredWaybills)
-                    : _buildWaybillCards(filteredWaybills);
+                return Column(
+                  children: [
+                    isWide
+                        ? _buildWaybillTable(visibleWaybills)
+                        : _buildWaybillCards(visibleWaybills),
+                    if (shouldPaginate) ...[
+                      const SizedBox(height: 12),
+                      _buildWaybillPaginationControls(
+                        totalItems: filteredWaybills.length,
+                        visibleCount: visibleWaybills.length,
+                        totalPages: totalPages,
+                      ),
+                    ],
+                  ],
+                );
               },
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWaybillPaginationControls({
+    required int totalItems,
+    required int visibleCount,
+    required int totalPages,
+  }) {
+    final start = (_waybillCurrentPage * _waybillItemsPerPage) + 1;
+    final end = ((_waybillCurrentPage * _waybillItemsPerPage) + visibleCount)
+        .clamp(0, totalItems);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _outline.withValues(alpha: 0.7)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Showing $start-$end of $totalItems',
+              style: const TextStyle(
+                color: _onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          IconButton.filledTonal(
+            tooltip: 'Previous page',
+            onPressed: _waybillCurrentPage == 0
+                ? null
+                : () => setState(() => _waybillCurrentPage--),
+            icon: const Icon(Icons.chevron_left),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Page ${_waybillCurrentPage + 1} of $totalPages',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(width: 8),
+          IconButton.filledTonal(
+            tooltip: 'Next page',
+            onPressed: _waybillCurrentPage >= totalPages - 1
+                ? null
+                : () => setState(() => _waybillCurrentPage++),
+            icon: const Icon(Icons.chevron_right),
+          ),
         ],
       ),
     );
@@ -1316,7 +1432,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
             : IconButton(
                 onPressed: () {
                   waybillSearchController.clear();
-                  setState(() {});
+                  setState(() => _waybillCurrentPage = 0);
                 },
                 icon: const Icon(Icons.close),
               ),
@@ -1545,6 +1661,27 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
         ),
         const SizedBox(height: 12),
         Card(
+          child: ListTile(
+            leading: const CircleAvatar(child: Icon(Icons.analytics_outlined)),
+            title: const Text('Rebuild Waybill Stats'),
+            subtitle: const Text(
+              'Create or refresh appStats/waybillsSummary from existing waybills.',
+            ),
+            trailing: FilledButton.icon(
+              onPressed: isRebuildingStats ? null : _rebuildWaybillStats,
+              icon: isRebuildingStats
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh),
+              label: Text(isRebuildingStats ? 'Rebuilding...' : 'Rebuild'),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -1619,7 +1756,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                 ],
               ),
             ),
-            if (action != null) action,
+            ?action,
           ],
         ),
       ),
