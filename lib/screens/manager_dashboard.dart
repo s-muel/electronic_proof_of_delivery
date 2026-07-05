@@ -1,6 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../models/waybill_model.dart';
+import '../models/waybill_stats_model.dart';
 import '../services/firebase_auth_service.dart';
 import '../services/firestore_waybill_service.dart';
 import '../services/waybill_service.dart';
@@ -17,8 +19,25 @@ class ManagerDashboard extends StatefulWidget {
 
 class _ManagerDashboardState extends State<ManagerDashboard> {
   List<WaybillModel> waybills = [];
+  WaybillStatsModel? dashboardStats;
   String managerName = '';
   String? openingCardKey;
+
+  int get _totalCount => dashboardStats?.total ?? waybills.length;
+
+  int get _pendingCount =>
+      dashboardStats?.pendingDelivery ?? _pendingWaybills.length;
+
+  int get _deliveredCount =>
+      dashboardStats?.delivered ?? _deliveredWaybills.length;
+
+  int get _sentForInvoicingCount =>
+      dashboardStats?.sentForInvoicing ?? _sentForInvoicingWaybills.length;
+
+  int get _invoicedCount =>
+      dashboardStats?.invoiced ?? _invoicedWaybills.length;
+
+  int get _rejectedCount => dashboardStats?.rejected ?? _issueWaybills.length;
 
   @override
   void initState() {
@@ -44,8 +63,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
 
     if (shouldUseFirestoreData) {
       try {
-        final allWaybills = await FirestoreWaybillService.getAllWaybills();
-        await WaybillService.replaceCachedWaybills(allWaybills);
+        dashboardStats = await FirestoreWaybillService.getWaybillStats();
       } catch (error) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -78,6 +96,9 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
     required String title,
     required List<WaybillModel> selectedWaybills,
     required String cardKey,
+    String? serverStatusFilter,
+    String? serverInvoiceStatusFilter,
+    String? serverExceptionFilter,
   }) async {
     if (openingCardKey != null) return;
 
@@ -89,8 +110,11 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            ManagerWaybillListScreen(title: title, waybills: selectedWaybills),
+        builder: (_) => ManagerWaybillListScreen(
+          title: title,
+          waybills: selectedWaybills,
+          serverExceptionFilter: serverExceptionFilter,
+        ),
       ),
     );
 
@@ -102,12 +126,16 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
   Future<void> _openExceptionWaybillList({
     required String title,
     required List<WaybillModel> selectedWaybills,
+    String? serverExceptionFilter,
   }) async {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            ManagerWaybillListScreen(title: title, waybills: selectedWaybills),
+        builder: (_) => ManagerWaybillListScreen(
+          title: title,
+          waybills: selectedWaybills,
+          serverExceptionFilter: serverExceptionFilter,
+        ),
       ),
     );
   }
@@ -152,10 +180,10 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
       children: [
         _ManagerHero(
           managerName: managerName,
-          totalCount: waybills.length,
-          deliveredCount: _deliveredWaybills.length,
-          sentCount: _sentForInvoicingWaybills.length,
-          issueCount: _issueWaybills.length,
+          totalCount: _totalCount,
+          deliveredCount: _deliveredCount,
+          sentCount: _sentForInvoicingCount,
+          issueCount: _rejectedCount,
         ),
         const SizedBox(height: 16),
         Row(
@@ -191,7 +219,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
           children: [
             _MetricCard(
               title: 'Total Waybills',
-              value: waybills.length,
+              value: _totalCount,
               icon: Icons.inventory_2,
               color: Colors.indigo,
               isLoading: openingCardKey == 'total',
@@ -199,7 +227,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
             ),
             _MetricCard(
               title: 'Pending',
-              value: _pendingWaybills.length,
+              value: _pendingCount,
               icon: Icons.pending_actions,
               color: Colors.orange,
               isLoading: openingCardKey == 'pending',
@@ -207,7 +235,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
             ),
             _MetricCard(
               title: 'Delivered',
-              value: _deliveredWaybills.length,
+              value: _deliveredCount,
               icon: Icons.local_shipping,
               color: Colors.blue,
               isLoading: openingCardKey == 'delivered',
@@ -215,7 +243,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
             ),
             _MetricCard(
               title: 'Sent for Invoicing',
-              value: _sentForInvoicingWaybills.length,
+              value: _sentForInvoicingCount,
               icon: Icons.outbox_rounded,
               color: Colors.deepPurple,
               isLoading: openingCardKey == 'sent',
@@ -223,7 +251,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
             ),
             _MetricCard(
               title: 'Invoiced',
-              value: _invoicedWaybills.length,
+              value: _invoicedCount,
               icon: Icons.done_all,
               color: Colors.green,
               isLoading: openingCardKey == 'invoiced',
@@ -231,7 +259,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
             ),
             _MetricCard(
               title: 'Rejected',
-              value: _issueWaybills.length,
+              value: _rejectedCount,
               icon: Icons.report_problem,
               color: Colors.red,
               isLoading: openingCardKey == 'issues',
@@ -249,6 +277,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
                   Expanded(
                     child: _ExceptionPanel(
                       waybills: waybills,
+                      stats: dashboardStats,
                       onOpenIssue: _openExceptionWaybillList,
                     ),
                   ),
@@ -262,6 +291,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
               children: [
                 _ExceptionPanel(
                   waybills: waybills,
+                  stats: dashboardStats,
                   onOpenIssue: _openExceptionWaybillList,
                 ),
                 const SizedBox(height: 16),
@@ -444,6 +474,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
       title: 'Pending Deliveries',
       selectedWaybills: _pendingWaybills,
       cardKey: 'pending',
+      serverStatusFilter: WaybillService.pendingDeliveryStatus,
     );
   }
 
@@ -452,6 +483,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
       title: 'Delivered Waybills',
       selectedWaybills: _deliveredWaybills,
       cardKey: 'delivered',
+      serverStatusFilter: WaybillService.deliveredStatus,
     );
   }
 
@@ -460,6 +492,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
       title: 'Invoiced Waybills',
       selectedWaybills: _invoicedWaybills,
       cardKey: 'invoiced',
+      serverStatusFilter: WaybillService.invoicedStatus,
     );
   }
 
@@ -468,6 +501,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
       title: 'Sent for Invoicing',
       selectedWaybills: _sentForInvoicingWaybills,
       cardKey: 'sent',
+      serverInvoiceStatusFilter: WaybillService.invoiceSentStatus,
     );
   }
 
@@ -476,6 +510,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
       title: 'Rejected Waybills',
       selectedWaybills: _issueWaybills,
       cardKey: 'issues',
+      serverInvoiceStatusFilter: WaybillService.invoiceRejectedStatus,
     );
   }
 }
@@ -547,11 +582,17 @@ class _SidebarItem extends StatelessWidget {
 class ManagerWaybillListScreen extends StatefulWidget {
   final String title;
   final List<WaybillModel> waybills;
+  final String? serverStatusFilter;
+  final String? serverInvoiceStatusFilter;
+  final String? serverExceptionFilter;
 
   const ManagerWaybillListScreen({
     super.key,
     required this.title,
     required this.waybills,
+    this.serverStatusFilter,
+    this.serverInvoiceStatusFilter,
+    this.serverExceptionFilter,
   });
 
   @override
@@ -560,8 +601,66 @@ class ManagerWaybillListScreen extends StatefulWidget {
 }
 
 class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
+  static const int _itemsPerPage = 25;
   late List<WaybillModel> filteredWaybills;
+  late List<WaybillModel> currentPageWaybills;
+  final List<DocumentSnapshot<Map<String, dynamic>>?> _pageCursors = [null];
+  final Map<int, List<WaybillModel>> _loadedPageCache = {};
+  final Map<int, bool> _pageHasMoreCache = {};
   final searchController = TextEditingController();
+  int _currentPage = 0;
+  bool _hasNextPage = false;
+  bool _isLoadingPage = false;
+  bool _usingLocalCache = false;
+  int _localTotalItems = 0;
+  int? _serverTotalWaybills;
+
+  bool get isAllWaybillList => widget.title.toLowerCase().contains('all');
+
+  bool get usesServerPagination =>
+      isAllWaybillList ||
+      widget.serverStatusFilter != null ||
+      widget.serverInvoiceStatusFilter != null ||
+      widget.serverExceptionFilter != null;
+
+  bool get shouldPaginate => usesServerPagination
+      ? _currentPage > 0 || _hasNextPage
+      : filteredWaybills.length > _itemsPerPage;
+
+  int get totalPages => filteredWaybills.isEmpty
+      ? 1
+      : ((filteredWaybills.length - 1) ~/ _itemsPerPage) + 1;
+
+  List<WaybillModel> get visibleWaybills {
+    if (usesServerPagination) return filteredWaybills;
+
+    final start = _currentPage * _itemsPerPage;
+    if (start >= filteredWaybills.length) return const [];
+
+    final end = (start + _itemsPerPage).clamp(0, filteredWaybills.length);
+    return filteredWaybills.sublist(start, end);
+  }
+
+  String get _showingSummary {
+    if (filteredWaybills.isEmpty) return '0 waybills showing';
+    if (!usesServerPagination) {
+      return '${filteredWaybills.length} waybills showing';
+    }
+
+    final start = (_currentPage * _itemsPerPage) + 1;
+    final rawEnd = start + visibleWaybills.length - 1;
+    final totalCount = _usingLocalCache && _localTotalItems > 0
+        ? _localTotalItems
+        : _serverTotalWaybills;
+    final end = totalCount == null ? rawEnd : rawEnd.clamp(0, totalCount);
+    if (_usingLocalCache && _localTotalItems > 0) {
+      return 'Showing $start-$end of $_localTotalItems cached waybills';
+    }
+    if (_serverTotalWaybills != null) {
+      return 'Showing $start-$end of $_serverTotalWaybills waybills';
+    }
+    return 'Showing $start-$end waybills';
+  }
 
   bool get isRejectedWaybillList =>
       widget.title.toLowerCase().contains('rejected');
@@ -571,10 +670,29 @@ class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
     return reason.isEmpty ? 'No rejection reason recorded' : reason;
   }
 
+  String _displayStatusFor(WaybillModel waybill) {
+    if (widget.serverInvoiceStatusFilter == WaybillService.invoiceSentStatus) {
+      return WaybillService.invoiceSentStatus;
+    }
+    if (widget.serverInvoiceStatusFilter ==
+        WaybillService.invoiceRejectedStatus) {
+      return WaybillService.invoiceRejectedStatus;
+    }
+    if (waybill.invoiceStatus == WaybillService.invoiceRejectedStatus) {
+      return WaybillService.invoiceRejectedStatus;
+    }
+    return waybill.status;
+  }
+
   @override
   void initState() {
     super.initState();
     filteredWaybills = widget.waybills;
+    currentPageWaybills = widget.waybills;
+    if (usesServerPagination) {
+      _hasNextPage = widget.waybills.length >= _itemsPerPage;
+      loadWaybillPage();
+    }
   }
 
   @override
@@ -587,10 +705,16 @@ class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
     final searchText = query.toLowerCase().trim();
 
     setState(() {
+      if (!usesServerPagination) _currentPage = 0;
+
+      final sourceWaybills = usesServerPagination
+          ? currentPageWaybills
+          : widget.waybills;
+
       if (searchText.isEmpty) {
-        filteredWaybills = widget.waybills;
+        filteredWaybills = sourceWaybills;
       } else {
-        filteredWaybills = widget.waybills.where((waybill) {
+        filteredWaybills = sourceWaybills.where((waybill) {
           return waybill.waybillNumber.toLowerCase().contains(searchText) ||
               waybill.bajNumber.toLowerCase().contains(searchText) ||
               waybill.shippingVendor.toLowerCase().contains(searchText) ||
@@ -602,6 +726,173 @@ class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
         }).toList();
       }
     });
+  }
+
+  int? _totalFromStats(WaybillStatsModel? stats) {
+    if (stats == null) return null;
+
+    if (widget.serverStatusFilter == WaybillService.pendingDeliveryStatus) {
+      return stats.pendingDelivery;
+    }
+    if (widget.serverStatusFilter == WaybillService.deliveredStatus) {
+      return stats.delivered;
+    }
+    if (widget.serverStatusFilter == WaybillService.invoicedStatus) {
+      return stats.invoiced;
+    }
+    if (widget.serverInvoiceStatusFilter == WaybillService.invoiceSentStatus) {
+      return stats.sentForInvoicing;
+    }
+    if (widget.serverInvoiceStatusFilter ==
+        WaybillService.invoiceRejectedStatus) {
+      return stats.rejected;
+    }
+    switch (widget.serverExceptionFilter) {
+      case 'short':
+        return stats.short;
+      case 'over':
+        return stats.over;
+      case 'damaged':
+        return stats.damaged;
+      case 'parkingUnsuitable':
+        return stats.parkingUnsuitable;
+      case 'partOrder':
+        return stats.partOrder;
+    }
+
+    return stats.total;
+  }
+
+  List<WaybillModel> _cachedFallbackWaybills() {
+    final cachedWaybills = WaybillService.getAllWaybills();
+    final statusFilter = widget.serverStatusFilter;
+    final invoiceStatusFilter = widget.serverInvoiceStatusFilter;
+    final exceptionFilter = widget.serverExceptionFilter;
+
+    if (statusFilter != null) {
+      return cachedWaybills
+          .where((waybill) => waybill.status == statusFilter)
+          .toList();
+    }
+    if (invoiceStatusFilter != null) {
+      return cachedWaybills
+          .where((waybill) => waybill.invoiceStatus == invoiceStatusFilter)
+          .toList();
+    }
+    if (exceptionFilter != null) {
+      return cachedWaybills
+          .where((waybill) => _matchesExceptionFilter(waybill, exceptionFilter))
+          .toList();
+    }
+
+    return cachedWaybills;
+  }
+
+  bool _matchesExceptionFilter(WaybillModel waybill, String exceptionFilter) {
+    switch (exceptionFilter) {
+      case 'short':
+        return waybill.isShort;
+      case 'over':
+        return waybill.isOver;
+      case 'damaged':
+        return waybill.isDamaged;
+      case 'parkingUnsuitable':
+        return waybill.isParkingUnsuitable;
+      case 'partOrder':
+        return waybill.isPartOrder;
+      default:
+        return false;
+    }
+  }
+
+  Future<void> loadWaybillPage({int pageIndex = 0}) async {
+    if (!usesServerPagination) return;
+
+    final cachedPage = _loadedPageCache[pageIndex];
+    if (cachedPage != null) {
+      currentPageWaybills = cachedPage;
+      filteredWaybills = cachedPage;
+      _hasNextPage = _pageHasMoreCache[pageIndex] ?? false;
+      _usingLocalCache = false;
+
+      if (!mounted) return;
+
+      setState(() {
+        _currentPage = pageIndex;
+        _isLoadingPage = false;
+      });
+      filterWaybills(searchController.text);
+      return;
+    }
+
+    setState(() => _isLoadingPage = true);
+
+    try {
+      final page = widget.serverStatusFilter != null
+          ? await FirestoreWaybillService.getWaybillsByStatusPage(
+              widget.serverStatusFilter!,
+              limit: _itemsPerPage,
+              startAfterDocument: _pageCursors[pageIndex],
+            )
+          : widget.serverInvoiceStatusFilter != null
+          ? await FirestoreWaybillService.getWaybillsByInvoiceStatusPage(
+              widget.serverInvoiceStatusFilter!,
+              limit: _itemsPerPage,
+              startAfterDocument: _pageCursors[pageIndex],
+            )
+          : widget.serverExceptionFilter != null
+          ? await FirestoreWaybillService.getWaybillsByExceptionPage(
+              widget.serverExceptionFilter!,
+              limit: _itemsPerPage,
+              startAfterDocument: _pageCursors[pageIndex],
+            )
+          : await FirestoreWaybillService.getAllWaybillsPage(
+              limit: _itemsPerPage,
+              startAfterDocument: _pageCursors[pageIndex],
+            );
+
+      if (page.hasMore && _pageCursors.length == pageIndex + 1) {
+        _pageCursors.add(page.lastDocument);
+      }
+
+      currentPageWaybills = page.waybills;
+      filteredWaybills = page.waybills;
+      _hasNextPage = page.hasMore;
+      _loadedPageCache[pageIndex] = page.waybills;
+      _pageHasMoreCache[pageIndex] = page.hasMore;
+      _usingLocalCache = false;
+      _localTotalItems = 0;
+      if (_serverTotalWaybills == null) {
+        final stats = await FirestoreWaybillService.getWaybillStats();
+        _serverTotalWaybills = _totalFromStats(stats);
+      }
+    } catch (_) {
+      _loadLocalPage(pageIndex);
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _currentPage = pageIndex;
+      _isLoadingPage = false;
+    });
+    filterWaybills(searchController.text);
+  }
+
+  void _loadLocalPage(int pageIndex) {
+    final cachedWaybills = _cachedFallbackWaybills();
+    final start = pageIndex * _itemsPerPage;
+    final end = (start + _itemsPerPage).clamp(0, cachedWaybills.length);
+
+    currentPageWaybills = start >= cachedWaybills.length
+        ? const []
+        : cachedWaybills.sublist(start, end);
+    filteredWaybills = currentPageWaybills;
+    _hasNextPage = end < cachedWaybills.length;
+    _loadedPageCache[pageIndex] = filteredWaybills;
+    _pageHasMoreCache[pageIndex] = _hasNextPage;
+    _usingLocalCache = true;
+    _localTotalItems = cachedWaybills.length;
   }
 
   Future<void> openWaybill(WaybillModel waybill) async {
@@ -663,7 +954,7 @@ class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${filteredWaybills.length} waybills showing',
+                          _showingSummary,
                           style: const TextStyle(color: Colors.black54),
                         ),
                       ],
@@ -690,11 +981,32 @@ class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: filteredWaybills.isEmpty
+              child: _isLoadingPage && filteredWaybills.isEmpty
+                  ? const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 12),
+                          Text('Loading waybills...'),
+                        ],
+                      ),
+                    )
+                  : filteredWaybills.isEmpty
                   ? const Center(child: Text('No waybills found.'))
-                  : isWideScreen
-                  ? _buildTableView()
-                  : _buildCardList(),
+                  : Column(
+                      children: [
+                        Expanded(
+                          child: isWideScreen
+                              ? _buildTableView()
+                              : _buildCardList(),
+                        ),
+                        if (shouldPaginate) ...[
+                          const SizedBox(height: 12),
+                          _buildPaginationControls(),
+                        ],
+                      ],
+                    ),
             ),
           ],
         ),
@@ -703,10 +1015,12 @@ class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
   }
 
   Widget _buildCardList() {
+    final pageWaybills = visibleWaybills;
+
     return ListView.builder(
-      itemCount: filteredWaybills.length,
+      itemCount: pageWaybills.length,
       itemBuilder: (context, index) {
-        final waybill = filteredWaybills[index];
+        final waybill = pageWaybills[index];
 
         return Card(
           elevation: 0,
@@ -724,7 +1038,7 @@ class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             subtitle: Text(
-              'BAJ: ${waybill.bajNumber}\nClient: ${waybill.consigneeReceiver}\nStatus: ${waybill.status}',
+              'BAJ: ${waybill.bajNumber}\nClient: ${waybill.consigneeReceiver}\nStatus: ${_displayStatusFor(waybill)}',
             ),
             isThreeLine: true,
             trailing: const Icon(Icons.chevron_right),
@@ -769,7 +1083,7 @@ class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
                     const DataColumn(label: Text('Rejection Reason')),
                   const DataColumn(label: Center(child: Text('Actions'))),
                 ],
-                rows: filteredWaybills.map((waybill) {
+                rows: visibleWaybills.map((waybill) {
                   return DataRow(
                     cells: [
                       DataCell(
@@ -798,7 +1112,7 @@ class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
                           ),
                         ),
                       ),
-                      DataCell(_StatusChip(status: waybill.status)),
+                      DataCell(_StatusChip(status: _displayStatusFor(waybill))),
                       if (isRejectedWaybillList)
                         DataCell(
                           SizedBox(
@@ -828,6 +1142,81 @@ class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPaginationControls() {
+    final start = (_currentPage * _itemsPerPage) + 1;
+    final rawEnd = usesServerPagination
+        ? start + visibleWaybills.length - 1
+        : ((_currentPage * _itemsPerPage) + visibleWaybills.length).clamp(
+            0,
+            filteredWaybills.length,
+          );
+    final totalCount = usesServerPagination
+        ? _usingLocalCache && _localTotalItems > 0
+              ? _localTotalItems
+              : _serverTotalWaybills
+        : filteredWaybills.length;
+    final end = totalCount == null ? rawEnd : rawEnd.clamp(0, totalCount);
+    final showingText = usesServerPagination
+        ? _usingLocalCache && _localTotalItems > 0
+              ? 'Showing $start-$end of $_localTotalItems cached'
+              : _serverTotalWaybills != null
+              ? 'Showing $start-$end of $_serverTotalWaybills'
+              : 'Showing $start-$end'
+        : 'Showing $start-$end of ${filteredWaybills.length}';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFDDE8F6)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              _isLoadingPage ? 'Loading waybills...' : showingText,
+              style: const TextStyle(
+                color: Color(0xFF5B718C),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          IconButton.filledTonal(
+            tooltip: 'Previous page',
+            onPressed: _currentPage == 0 || _isLoadingPage
+                ? null
+                : usesServerPagination
+                ? () => loadWaybillPage(pageIndex: _currentPage - 1)
+                : () => setState(() => _currentPage--),
+            icon: const Icon(Icons.chevron_left),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            usesServerPagination
+                ? 'Page ${_currentPage + 1}'
+                : 'Page ${_currentPage + 1} of $totalPages',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(width: 8),
+          IconButton.filledTonal(
+            tooltip: 'Next page',
+            onPressed:
+                _isLoadingPage ||
+                    (usesServerPagination
+                        ? !_hasNextPage
+                        : _currentPage >= totalPages - 1)
+                ? null
+                : usesServerPagination
+                ? () => loadWaybillPage(pageIndex: _currentPage + 1)
+                : () => setState(() => _currentPage++),
+            icon: const Icon(Icons.chevron_right),
+          ),
+        ],
       ),
     );
   }
@@ -1088,13 +1477,19 @@ class _MetricCard extends StatelessWidget {
 
 class _ExceptionPanel extends StatelessWidget {
   final List<WaybillModel> waybills;
+  final WaybillStatsModel? stats;
   final Future<void> Function({
     required String title,
     required List<WaybillModel> selectedWaybills,
+    String? serverExceptionFilter,
   })
   onOpenIssue;
 
-  const _ExceptionPanel({required this.waybills, required this.onOpenIssue});
+  const _ExceptionPanel({
+    required this.waybills,
+    required this.onOpenIssue,
+    this.stats,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1118,47 +1513,52 @@ class _ExceptionPanel extends StatelessWidget {
         children: [
           _ExceptionRow(
             label: 'Short',
-            value: shortWaybills.length,
+            value: stats?.short ?? shortWaybills.length,
             color: Colors.orange,
             onTap: () => onOpenIssue(
               title: 'Short Waybills',
               selectedWaybills: shortWaybills,
+              serverExceptionFilter: 'short',
             ),
           ),
           _ExceptionRow(
             label: 'Over',
-            value: overWaybills.length,
+            value: stats?.over ?? overWaybills.length,
             color: Colors.blue,
             onTap: () => onOpenIssue(
               title: 'Over Waybills',
               selectedWaybills: overWaybills,
+              serverExceptionFilter: 'over',
             ),
           ),
           _ExceptionRow(
             label: 'Damaged',
-            value: damagedWaybills.length,
+            value: stats?.damaged ?? damagedWaybills.length,
             color: Colors.red,
             onTap: () => onOpenIssue(
               title: 'Damaged Waybills',
               selectedWaybills: damagedWaybills,
+              serverExceptionFilter: 'damaged',
             ),
           ),
           _ExceptionRow(
             label: 'Parking Unsuitable',
-            value: parkingWaybills.length,
+            value: stats?.parkingUnsuitable ?? parkingWaybills.length,
             color: Colors.deepPurple,
             onTap: () => onOpenIssue(
               title: 'Parking Unsuitable Waybills',
               selectedWaybills: parkingWaybills,
+              serverExceptionFilter: 'parkingUnsuitable',
             ),
           ),
           _ExceptionRow(
             label: 'Part Order',
-            value: partOrderWaybills.length,
+            value: stats?.partOrder ?? partOrderWaybills.length,
             color: Colors.teal,
             onTap: () => onOpenIssue(
               title: 'Part Order Waybills',
               selectedWaybills: partOrderWaybills,
+              serverExceptionFilter: 'partOrder',
             ),
           ),
         ],
@@ -1232,6 +1632,8 @@ class _StatusGraphPanelState extends State<_StatusGraphPanel> {
   String selectedFilter = 'All';
   int selectedMonth = 0;
   int selectedYear = DateTime.now().year < 2026 ? 2026 : DateTime.now().year;
+  WaybillStatsModel? graphStats;
+  bool isLoadingStats = false;
 
   static const List<String> monthNames = [
     'January',
@@ -1247,6 +1649,44 @@ class _StatusGraphPanelState extends State<_StatusGraphPanel> {
     'November',
     'December',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadGraphStats();
+  }
+
+  Future<void> _loadGraphStats() async {
+    setState(() => isLoadingStats = true);
+
+    try {
+      final stats = selectedFilter == 'All'
+          ? await FirestoreWaybillService.getWaybillStats()
+          : selectedMonth == 0
+          ? await FirestoreWaybillService.getYearlyWaybillStats(selectedYear)
+          : await FirestoreWaybillService.getMonthlyWaybillStats(
+              selectedYear,
+              selectedMonth,
+            );
+
+      if (!mounted) return;
+      setState(() {
+        graphStats = stats;
+        isLoadingStats = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        graphStats = null;
+        isLoadingStats = false;
+      });
+    }
+  }
+
+  void _updateGraphFilter(VoidCallback update) {
+    setState(update);
+    _loadGraphStats();
+  }
 
   List<WaybillModel> get filteredWaybills {
     if (selectedFilter == 'All') return widget.waybills;
@@ -1284,25 +1724,15 @@ class _StatusGraphPanelState extends State<_StatusGraphPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final graphWaybills = filteredWaybills;
-    final pendingCount = graphWaybills
-        .where(
-          (waybill) => waybill.status == WaybillService.pendingDeliveryStatus,
-        )
-        .length;
-    final deliveredCount = graphWaybills
-        .where((waybill) => waybill.status == WaybillService.deliveredStatus)
-        .length;
-    final invoicedCount = graphWaybills
-        .where((waybill) => waybill.status == WaybillService.invoicedStatus)
-        .length;
-    final issueCount = graphWaybills
-        .where(
-          (waybill) =>
-              waybill.invoiceStatus == WaybillService.invoiceRejectedStatus,
-        )
-        .length;
+    final stats =
+        graphStats ?? WaybillStatsModel.fromWaybills(filteredWaybills);
+    final totalCount = stats.total;
+    final pendingCount = stats.pendingDelivery;
+    final deliveredCount = stats.delivered;
+    final invoicedCount = stats.invoiced;
+    final issueCount = stats.rejected;
     final maxCount = [
+      totalCount,
       pendingCount,
       deliveredCount,
       invoicedCount,
@@ -1324,12 +1754,14 @@ class _StatusGraphPanelState extends State<_StatusGraphPanel> {
               ChoiceChip(
                 label: const Text('All'),
                 selected: selectedFilter == 'All',
-                onSelected: (_) => setState(() => selectedFilter = 'All'),
+                onSelected: (_) =>
+                    _updateGraphFilter(() => selectedFilter = 'All'),
               ),
               ChoiceChip(
                 label: const Text('By Month'),
                 selected: selectedFilter == 'Month',
-                onSelected: (_) => setState(() => selectedFilter = 'Month'),
+                onSelected: (_) =>
+                    _updateGraphFilter(() => selectedFilter = 'Month'),
               ),
               DropdownButton<int>(
                 value: selectedMonth,
@@ -1344,7 +1776,7 @@ class _StatusGraphPanelState extends State<_StatusGraphPanel> {
                 onChanged: selectedFilter == 'Month'
                     ? (value) {
                         if (value == null) return;
-                        setState(() => selectedMonth = value);
+                        _updateGraphFilter(() => selectedMonth = value);
                       }
                     : null,
               ),
@@ -1357,13 +1789,23 @@ class _StatusGraphPanelState extends State<_StatusGraphPanel> {
                 onChanged: selectedFilter == 'Month'
                     ? (value) {
                         if (value == null) return;
-                        setState(() => selectedYear = value);
+                        _updateGraphFilter(() => selectedYear = value);
                       }
                     : null,
               ),
             ],
           ),
+          if (isLoadingStats) ...[
+            const SizedBox(height: 10),
+            const LinearProgressIndicator(minHeight: 3),
+          ],
           const SizedBox(height: 14),
+          _StatusGraphBar(
+            label: 'Total Waybills',
+            value: totalCount,
+            maxValue: maxCount,
+            color: Colors.indigo,
+          ),
           _StatusGraphBar(
             label: 'Pending Delivery',
             value: pendingCount,
@@ -1516,18 +1958,21 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final normalizedStatus = status.trim().toLowerCase();
     Color color;
 
     if (status == WaybillService.deliveredStatus) {
       color = Colors.green;
     } else if (status == WaybillService.invoicedStatus) {
       color = Colors.blue;
-    } else if (status == WaybillService.pendingSyncStatus) {
+    } else if (normalizedStatus == 'sent for invoicing') {
+      color = Colors.indigo;
+    } else if (normalizedStatus == 'rejected' ||
+        status == WaybillService.pendingSyncStatus) {
       color = Colors.red;
     } else {
       color = Colors.orange;
     }
-
     return Chip(
       label: Text(status),
       backgroundColor: color.withValues(alpha: 0.10),

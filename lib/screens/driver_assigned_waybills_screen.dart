@@ -1,6 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import '../models/waybill_model.dart';
+import '../models/waybill_stats_model.dart';
 import '../services/firebase_auth_service.dart';
 import '../services/firestore_waybill_service.dart';
 import '../services/pdf_service.dart';
@@ -19,8 +21,17 @@ class DriverAssignedWaybillsScreen extends StatefulWidget {
 
 class _DriverAssignedWaybillsScreenState
     extends State<DriverAssignedWaybillsScreen> {
+  static const int _itemsPerPage = 25;
+
   final searchController = TextEditingController();
   List<WaybillModel> assignedWaybills = [];
+  final List<DocumentSnapshot<Map<String, dynamic>>?> _pageCursors = [null];
+  final Map<int, List<WaybillModel>> _loadedPageCache = {};
+  final Map<int, bool> _pageHasMoreCache = {};
+  WaybillStatsModel? assignedStats;
+  int _currentPage = 0;
+  bool _hasNextPage = false;
+  bool _usingServerPagination = false;
   String selectedStatusFilter = 'All';
   bool isLoading = true;
   String? sharingWaybillNumber;
@@ -56,18 +67,97 @@ class _DriverAssignedWaybillsScreenState
     super.dispose();
   }
 
-  Future<void> loadAssignedWaybills() async {
+  bool _hasInvalidStats(WaybillStatsModel? stats) {
+    if (stats == null) return true;
+
+    return stats.total < 0 ||
+        stats.pendingDelivery < 0 ||
+        stats.delivered < 0 ||
+        stats.invoiced < 0 ||
+        stats.rejected < 0;
+  }
+
+  String? get _serverStatusFilter =>
+      selectedStatusFilter == 'All' ? null : selectedStatusFilter;
+
+  void _resetPagination() {
+    _currentPage = 0;
+    _hasNextPage = false;
+    _pageCursors
+      ..clear()
+      ..add(null);
+    _loadedPageCache.clear();
+    _pageHasMoreCache.clear();
+  }
+
+  Future<void> loadAssignedWaybills({
+    int pageIndex = 0,
+    bool resetPagination = false,
+  }) async {
     final driverId = FirebaseAuthService.currentFirebaseUser?.uid ?? '';
+
+    if (resetPagination) _resetPagination();
+
+    final cachedPage = _loadedPageCache[pageIndex];
+    if (cachedPage != null && shouldUseFirestoreData) {
+      setState(() {
+        assignedWaybills = cachedPage;
+        _currentPage = pageIndex;
+        _hasNextPage = _pageHasMoreCache[pageIndex] ?? false;
+        _usingServerPagination = true;
+        isLoading = false;
+      });
+      return;
+    }
 
     setState(() => isLoading = true);
 
     if (shouldUseFirestoreData) {
       try {
-        final onlineWaybills =
-            await FirestoreWaybillService.getWaybillsAssignedToDriver(driverId);
-        await WaybillService.replaceCachedWaybills(onlineWaybills);
+        var stats = await FirestoreWaybillService.getAssignedDriverWaybillStats(
+          driverId,
+        );
+        if (_hasInvalidStats(stats)) {
+          stats =
+              await FirestoreWaybillService.rebuildAssignedDriverWaybillStats(
+                driverId,
+              );
+        }
+
+        while (_pageCursors.length <= pageIndex) {
+          _pageCursors.add(null);
+        }
+
+        final page =
+            await FirestoreWaybillService.getWaybillsAssignedToDriverPage(
+              driverId,
+              limit: _itemsPerPage,
+              startAfterDocument: _pageCursors[pageIndex],
+              statusFilter: _serverStatusFilter,
+            );
+        await WaybillService.mergeCachedWaybills(page.waybills);
+
+        if (_pageCursors.length <= pageIndex + 1) {
+          _pageCursors.add(page.lastDocument);
+        } else {
+          _pageCursors[pageIndex + 1] = page.lastDocument;
+        }
+
+        if (!mounted) return;
+
+        setState(() {
+          assignedStats = stats;
+          assignedWaybills = page.waybills;
+          _loadedPageCache[pageIndex] = page.waybills;
+          _pageHasMoreCache[pageIndex] = page.hasMore;
+          _currentPage = pageIndex;
+          _hasNextPage = page.hasMore;
+          _usingServerPagination = true;
+          isLoading = false;
+        });
+        return;
       } catch (_) {
-        // The driver can still see the locally cached assigned waybills offline.
+        // The driver can still see locally cached assigned waybills offline.
       }
     }
 
@@ -78,6 +168,10 @@ class _DriverAssignedWaybillsScreenState
 
     setState(() {
       assignedWaybills = localWaybills;
+      assignedStats = WaybillStatsModel.fromWaybills(localWaybills);
+      _usingServerPagination = false;
+      _hasNextPage = false;
+      _currentPage = 0;
       isLoading = false;
     });
   }
@@ -175,7 +269,9 @@ class _DriverAssignedWaybillsScreenState
         actions: [
           IconButton(
             tooltip: 'Refresh',
-            onPressed: isLoading ? null : loadAssignedWaybills,
+            onPressed: isLoading
+                ? null
+                : () => loadAssignedWaybills(resetPagination: true),
             icon: const Icon(Icons.refresh),
           ),
         ],
@@ -196,9 +292,19 @@ class _DriverAssignedWaybillsScreenState
                   ? _buildEmptyState()
                   : filteredWaybills.isEmpty
                   ? _buildNoMatchesState()
-                  : isWideScreen
-                  ? _buildTableView()
-                  : _buildCardList(),
+                  : Column(
+                      children: [
+                        Expanded(
+                          child: isWideScreen
+                              ? _buildTableView()
+                              : _buildCardList(),
+                        ),
+                        if (_usingServerPagination) ...[
+                          const SizedBox(height: 12),
+                          _buildPaginationControls(),
+                        ],
+                      ],
+                    ),
             ),
           ],
         ),
@@ -207,12 +313,16 @@ class _DriverAssignedWaybillsScreenState
   }
 
   Widget _buildHeader() {
-    final pendingCount = assignedWaybills
-        .where(
-          (waybill) => waybill.status == WaybillService.pendingDeliveryStatus,
-        )
-        .length;
-    final completedCount = assignedWaybills.length - pendingCount;
+    final totalCount = assignedStats?.total ?? assignedWaybills.length;
+    final pendingCount =
+        assignedStats?.pendingDelivery ??
+        assignedWaybills
+            .where(
+              (waybill) =>
+                  waybill.status == WaybillService.pendingDeliveryStatus,
+            )
+            .length;
+    final completedCount = totalCount - pendingCount;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -253,7 +363,7 @@ class _DriverAssignedWaybillsScreenState
           ),
           Chip(
             avatar: const Icon(Icons.assignment, size: 18),
-            label: Text('${assignedWaybills.length} Total'),
+            label: Text('$totalCount Total'),
           ),
         ],
       ),
@@ -326,15 +436,21 @@ class _DriverAssignedWaybillsScreenState
     final pendingCount = _countByStatus(WaybillService.pendingDeliveryStatus);
     final deliveredCount = _countByStatus(WaybillService.deliveredStatus);
     final invoicedCount = _countByStatus(WaybillService.invoicedStatus);
-    final showingCount = filteredWaybills.length;
+    final showingCount = selectedStatusFilter == 'All'
+        ? assignedStats?.total ?? filteredWaybills.length
+        : _countByStatus(selectedStatusFilter);
 
     return PopupMenuButton<String>(
       initialValue: selectedStatusFilter,
       onSelected: (value) {
         setState(() => selectedStatusFilter = value);
+        loadAssignedWaybills(resetPagination: true);
       },
       itemBuilder: (context) => [
-        _buildFilterMenuItem('All', assignedWaybills.length),
+        _buildFilterMenuItem(
+          'All',
+          assignedStats?.total ?? assignedWaybills.length,
+        ),
         _buildFilterMenuItem(
           WaybillService.pendingDeliveryStatus,
           pendingCount,
@@ -398,7 +514,65 @@ class _DriverAssignedWaybillsScreenState
   }
 
   int _countByStatus(String status) {
+    final stats = assignedStats;
+    if (stats != null) {
+      switch (status) {
+        case WaybillService.pendingDeliveryStatus:
+          return stats.pendingDelivery;
+        case WaybillService.deliveredStatus:
+          return stats.delivered;
+        case WaybillService.invoicedStatus:
+          return stats.invoiced;
+      }
+    }
+
     return assignedWaybills.where((waybill) => waybill.status == status).length;
+  }
+
+  Widget _buildPaginationControls() {
+    final start = (_currentPage * _itemsPerPage) + 1;
+    final end = start + assignedWaybills.length - 1;
+    final total = selectedStatusFilter == 'All'
+        ? assignedStats?.total
+        : _countByStatus(selectedStatusFilter);
+    final showingText = total == null
+        ? 'Showing $start-$end'
+        : 'Showing $start-$end of $total';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFD8E7FB)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              isLoading ? 'Loading waybills...' : showingText,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          IconButton.filledTonal(
+            onPressed: isLoading || _currentPage == 0
+                ? null
+                : () => loadAssignedWaybills(pageIndex: _currentPage - 1),
+            icon: const Icon(Icons.chevron_left),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text('Page ${_currentPage + 1}'),
+          ),
+          IconButton.filledTonal(
+            onPressed: isLoading || !_hasNextPage
+                ? null
+                : () => loadAssignedWaybills(pageIndex: _currentPage + 1),
+            icon: const Icon(Icons.chevron_right),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildEmptyState() {
@@ -459,7 +633,7 @@ class _DriverAssignedWaybillsScreenState
 
   Widget _buildCardList() {
     return RefreshIndicator(
-      onRefresh: loadAssignedWaybills,
+      onRefresh: () => loadAssignedWaybills(resetPagination: true),
       child: ListView.builder(
         itemCount: filteredWaybills.length,
         itemBuilder: (context, index) {
