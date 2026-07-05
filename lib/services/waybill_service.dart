@@ -82,6 +82,12 @@ class WaybillService {
     }
   }
 
+  static Future<void> mergeCachedWaybills(List<WaybillModel> waybills) async {
+    for (final waybill in _uniqueByWaybillNumber(waybills)) {
+      await updateWaybillByNumber(waybill);
+    }
+  }
+
   static List<WaybillModel> _uniqueByWaybillNumber(
     List<WaybillModel> waybills,
   ) {
