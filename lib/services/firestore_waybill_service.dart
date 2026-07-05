@@ -219,11 +219,66 @@ class FirestoreWaybillService {
           .add(waybill);
     }
 
-    final batch = _firestore.batch();
-    batch.set(_firestore.doc(_statsDocumentPath), stats.toMap());
+    final usersSnapshot = await _firestore.collection('users').get();
+    final appStatsSnapshot = await _firestore.collection('appStats').get();
+    final emptyStatsMap = WaybillStatsModel.empty().toMap();
+    final currentYearlyPaths = yearlyGroups.keys.map(_yearlyStatsPath).toSet();
+    final currentMonthlyPaths = monthlyGroups.keys.map((key) {
+      final parts = key.split('_');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      return _monthlyStatsPath(year, month);
+    }).toSet();
+
+    var batch = _firestore.batch();
+    var writeCount = 0;
+
+    Future<void> commitIfNeeded() async {
+      if (writeCount < 450) return;
+      await batch.commit();
+      batch = _firestore.batch();
+      writeCount = 0;
+    }
+
+    Future<void> setDoc(
+      DocumentReference<Map<String, dynamic>> ref,
+      Map<String, dynamic> data,
+    ) async {
+      batch.set(ref, data);
+      writeCount++;
+      await commitIfNeeded();
+    }
+
+    Future<void> deleteDoc(DocumentReference<Map<String, dynamic>> ref) async {
+      batch.delete(ref);
+      writeCount++;
+      await commitIfNeeded();
+    }
+
+    await setDoc(_firestore.doc(_statsDocumentPath), stats.toMap());
+
+    for (final doc in appStatsSnapshot.docs) {
+      final path = doc.reference.path;
+      final isStaleYearly =
+          doc.id.startsWith('yearly_') && !currentYearlyPaths.contains(path);
+      final isStaleMonthly =
+          doc.id.startsWith('monthly_') && !currentMonthlyPaths.contains(path);
+
+      if (isStaleYearly || isStaleMonthly) {
+        await deleteDoc(doc.reference);
+      }
+    }
+
+    for (final userDoc in usersSnapshot.docs) {
+      await setDoc(_firestore.doc(_userStatsPath(userDoc.id)), emptyStatsMap);
+      await setDoc(
+        _firestore.doc(_assignedDriverStatsPath(userDoc.id)),
+        emptyStatsMap,
+      );
+    }
 
     for (final entry in yearlyGroups.entries) {
-      batch.set(
+      await setDoc(
         _firestore.doc(_yearlyStatsPath(entry.key)),
         WaybillStatsModel.fromWaybills(entry.value).toMap(),
       );
@@ -233,26 +288,29 @@ class FirestoreWaybillService {
       final parts = entry.key.split('_');
       final year = int.parse(parts[0]);
       final month = int.parse(parts[1]);
-      batch.set(
+      await setDoc(
         _firestore.doc(_monthlyStatsPath(year, month)),
         WaybillStatsModel.fromWaybills(entry.value).toMap(),
       );
     }
 
     for (final entry in userGroups.entries) {
-      batch.set(
+      await setDoc(
         _firestore.doc(_userStatsPath(entry.key)),
         WaybillStatsModel.fromWaybills(entry.value).toMap(),
       );
     }
 
     for (final entry in assignedDriverGroups.entries) {
-      batch.set(
+      await setDoc(
         _firestore.doc(_assignedDriverStatsPath(entry.key)),
         WaybillStatsModel.fromWaybills(entry.value).toMap(),
       );
     }
-    await batch.commit();
+
+    if (writeCount > 0) {
+      await batch.commit();
+    }
     return stats;
   }
 
