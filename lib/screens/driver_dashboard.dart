@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/waybill_model.dart';
+import '../models/waybill_stats_model.dart';
 import '../services/delivery_sync_service.dart';
 import '../services/firebase_auth_service.dart';
 import '../services/firestore_waybill_service.dart';
@@ -24,6 +25,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
   List<WaybillModel> pendingWaybills = [];
   List<WaybillModel> pendingSyncWaybills = [];
   int assignedWaybillCount = 0;
+  int pendingDeliveryCount = 0;
   bool isSyncing = false;
 
   List<WaybillModel> get visibleWaybills {
@@ -43,31 +45,69 @@ class _DriverDashboardState extends State<DriverDashboard> {
     final driverId = FirebaseAuthService.currentFirebaseUser?.uid ?? '';
 
     setState(() {
-      pendingWaybills =
-          WaybillService.getPendingWaybillsAssignedToDriver(driverId);
+      pendingWaybills = WaybillService.getPendingWaybillsAssignedToDriver(
+        driverId,
+      );
       pendingSyncWaybills =
           WaybillService.getPendingSyncWaybillsAssignedToDriver(driverId);
-      assignedWaybillCount =
-          WaybillService.getWaybillsAssignedToDriver(driverId).length;
+      pendingDeliveryCount = pendingWaybills.length;
+      assignedWaybillCount = WaybillService.getWaybillsAssignedToDriver(
+        driverId,
+      ).length;
     });
+  }
+
+  bool _hasInvalidStats(WaybillStatsModel? stats) {
+    if (stats == null) return true;
+
+    return stats.total < 0 ||
+        stats.pendingDelivery < 0 ||
+        stats.delivered < 0 ||
+        stats.invoiced < 0 ||
+        stats.rejected < 0;
   }
 
   Future<void> loadPendingWaybillsFromFirestore() async {
     final driverId = FirebaseAuthService.currentFirebaseUser?.uid ?? '';
 
-    if (shouldUseFirestoreData) {
-      try {
-        final assignedWaybills =
-            await FirestoreWaybillService.getWaybillsAssignedToDriver(driverId);
-        await WaybillService.replaceCachedWaybills(assignedWaybills);
-      } catch (_) {
-        // Keep using the local cache when Firestore is unavailable.
-      }
+    if (!shouldUseFirestoreData) {
+      loadPendingWaybills();
+      return;
     }
 
-    if (!mounted) return;
+    try {
+      var stats = await FirestoreWaybillService.getAssignedDriverWaybillStats(
+        driverId,
+      );
+      if (_hasInvalidStats(stats)) {
+        stats = await FirestoreWaybillService.rebuildAssignedDriverWaybillStats(
+          driverId,
+        );
+      }
 
-    loadPendingWaybills();
+      final page =
+          await FirestoreWaybillService.getWaybillsAssignedToDriverPage(
+            driverId,
+            limit: 25,
+            statusFilter: WaybillService.pendingDeliveryStatus,
+          );
+      await WaybillService.mergeCachedWaybills(page.waybills);
+
+      if (!mounted) return;
+
+      setState(() {
+        pendingWaybills = page.waybills;
+        pendingSyncWaybills =
+            WaybillService.getPendingSyncWaybillsAssignedToDriver(driverId);
+        pendingDeliveryCount = stats?.pendingDelivery ?? pendingWaybills.length;
+        assignedWaybillCount =
+            stats?.total ??
+            WaybillService.getWaybillsAssignedToDriver(driverId).length;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      loadPendingWaybills();
+    }
   }
 
   Future<void> refreshDashboard() async {
@@ -92,16 +132,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
 
     if (!mounted) return;
 
-    setState(() {
-      final driverId = FirebaseAuthService.currentFirebaseUser?.uid ?? '';
-      pendingWaybills =
-          WaybillService.getPendingWaybillsAssignedToDriver(driverId);
-      pendingSyncWaybills =
-          WaybillService.getPendingSyncWaybillsAssignedToDriver(driverId);
-      assignedWaybillCount =
-          WaybillService.getWaybillsAssignedToDriver(driverId).length;
-      isSyncing = false;
-    });
+    setState(() => isSyncing = false);
 
     if (syncedCount > 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -238,7 +269,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
     final cards = [
       _DriverSummaryCard(
         title: 'Pending Delivery',
-        count: pendingWaybills.length,
+        count: pendingDeliveryCount,
         icon: Icons.pending_actions,
         color: Colors.orange,
       ),

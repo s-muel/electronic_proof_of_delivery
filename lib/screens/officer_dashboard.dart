@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../models/waybill_model.dart';
+import '../models/waybill_stats_model.dart';
 import '../services/delivery_sync_service.dart';
 import '../services/firebase_auth_service.dart';
 import '../services/firestore_waybill_service.dart';
@@ -21,6 +23,52 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
   int deliveredCount = 0;
   int invoicedCount = 0;
   int rejectedCount = 0;
+
+  bool _isRejectedWaybill(WaybillModel waybill) =>
+      waybill.invoiceStatus == WaybillService.invoiceRejectedStatus;
+
+  void _applyDashboardCounts(List<WaybillModel> officerWaybills) {
+    pendingCount = officerWaybills
+        .where(
+          (waybill) =>
+              waybill.status == WaybillService.pendingDeliveryStatus &&
+              !_isRejectedWaybill(waybill),
+        )
+        .length;
+    rejectedCount = officerWaybills.where(_isRejectedWaybill).length;
+    deliveredCount = officerWaybills
+        .where(
+          (waybill) =>
+              waybill.status == WaybillService.deliveredStatus &&
+              !_isRejectedWaybill(waybill),
+        )
+        .length;
+    invoicedCount = officerWaybills
+        .where(
+          (waybill) =>
+              waybill.status == WaybillService.invoicedStatus &&
+              !_isRejectedWaybill(waybill),
+        )
+        .length;
+  }
+
+  void _applyStatsCounts(WaybillStatsModel stats) {
+    pendingCount = stats.pendingDelivery;
+    deliveredCount = stats.delivered;
+    invoicedCount = stats.invoiced;
+    rejectedCount = stats.rejected;
+  }
+
+  bool _hasInvalidStats(WaybillStatsModel? stats) {
+    if (stats == null) return true;
+
+    return stats.total < 0 ||
+        stats.pendingDelivery < 0 ||
+        stats.delivered < 0 ||
+        stats.invoiced < 0 ||
+        stats.rejected < 0;
+  }
+
   bool isSyncing = false;
   String officerName = '';
 
@@ -30,21 +78,7 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
     if (shouldSkipAutomaticFirebaseRefresh) {
       setState(() {
         final userId = FirebaseAuthService.currentFirebaseUser?.uid ?? '';
-        pendingCount = WaybillService.getPendingWaybillsCreatedBy(
-          userId,
-        ).length;
-        deliveredCount = WaybillService.getDeliveredWaybillsCreatedBy(
-          userId,
-        ).length;
-        invoicedCount = WaybillService.getInvoicedWaybillsCreatedBy(
-          userId,
-        ).length;
-        rejectedCount = WaybillService.getWaybillsCreatedBy(userId)
-            .where(
-              (waybill) =>
-                  waybill.invoiceStatus == WaybillService.invoiceRejectedStatus,
-            )
-            .length;
+        _applyDashboardCounts(WaybillService.getWaybillsCreatedBy(userId));
       });
     } else {
       loadDashboardCounts();
@@ -54,7 +88,8 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
   Future<void> loadDashboardCounts() async {
     final userId = FirebaseAuthService.currentFirebaseUser?.uid ?? '';
     final firebaseUser = FirebaseAuthService.currentFirebaseUser;
-    var officerWaybills = WaybillService.getWaybillsCreatedBy(userId);
+    final cachedOfficerWaybills = WaybillService.getWaybillsCreatedBy(userId);
+    WaybillStatsModel? officerStats;
     var loadedOfficerName =
         firebaseUser?.displayName ?? firebaseUser?.email ?? '';
 
@@ -67,13 +102,16 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
 
     if (shouldUseFirestoreData) {
       try {
-        officerWaybills = await FirestoreWaybillService.getWaybillsCreatedBy(
+        officerStats = await FirestoreWaybillService.getUserWaybillStats(
           userId,
         );
-        await WaybillService.replaceCachedWaybills(officerWaybills);
+        if (_hasInvalidStats(officerStats)) {
+          officerStats = await FirestoreWaybillService.rebuildUserWaybillStats(
+            userId,
+          );
+        }
       } catch (_) {
-        // Keep using the local cache when Firestore is unavailable.
-        officerWaybills = WaybillService.getWaybillsCreatedBy(userId);
+        // Keep using the local cache when Firestore stats are unavailable.
       }
     }
 
@@ -81,23 +119,11 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
 
     setState(() {
       officerName = loadedOfficerName;
-      pendingCount = officerWaybills
-          .where(
-            (waybill) => waybill.status == WaybillService.pendingDeliveryStatus,
-          )
-          .length;
-      deliveredCount = officerWaybills
-          .where((waybill) => waybill.status == WaybillService.deliveredStatus)
-          .length;
-      invoicedCount = officerWaybills
-          .where((waybill) => waybill.status == WaybillService.invoicedStatus)
-          .length;
-      rejectedCount = officerWaybills
-          .where(
-            (waybill) =>
-                waybill.invoiceStatus == WaybillService.invoiceRejectedStatus,
-          )
-          .length;
+      if (officerStats != null) {
+        _applyStatsCounts(officerStats);
+      } else {
+        _applyDashboardCounts(cachedOfficerWaybills);
+      }
     });
   }
 
