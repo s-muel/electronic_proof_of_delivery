@@ -199,6 +199,12 @@ class _DriverDashboardState extends State<DriverDashboard> {
 
   void openWaybillDetails(int index, WaybillModel waybill) async {
     if (index == -1) {
+      index = await WaybillService.ensureCachedIndex(waybill);
+    }
+
+    if (!mounted) return;
+
+    if (index == -1) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not find this waybill record')),
       );
