@@ -137,6 +137,19 @@ class _DriverAssignedWaybillsScreenState
             );
         await WaybillService.mergeCachedWaybills(page.waybills);
 
+        if (pageIndex == 0 &&
+            _serverStatusFilter == null &&
+            !page.hasMore &&
+            stats != null &&
+            stats.total > page.waybills.length) {
+          debugPrint(
+            'DRIVER ASSIGNED WAYBILLS COUNT MISMATCH: stats=${stats.total}, query=${page.waybills.length}. Rebuilding driver stats.',
+          );
+          stats =
+              await FirestoreWaybillService.rebuildAssignedDriverWaybillStats(
+                driverId,
+              );
+        }
         if (_pageCursors.length <= pageIndex + 1) {
           _pageCursors.add(page.lastDocument);
         } else {
@@ -156,8 +169,53 @@ class _DriverAssignedWaybillsScreenState
           isLoading = false;
         });
         return;
-      } catch (_) {
-        // The driver can still see locally cached assigned waybills offline.
+      } catch (error) {
+        debugPrint('DRIVER ASSIGNED WAYBILLS PAGE ERROR: $error');
+
+        try {
+          var assignedFromFirestore =
+              await FirestoreWaybillService.getWaybillsAssignedToDriver(
+                driverId,
+              );
+
+          if (_serverStatusFilter != null) {
+            assignedFromFirestore = assignedFromFirestore
+                .where((waybill) => waybill.status == _serverStatusFilter)
+                .toList();
+          }
+
+          final start = pageIndex * _itemsPerPage;
+          final end = (start + _itemsPerPage).clamp(
+            0,
+            assignedFromFirestore.length,
+          );
+          final fallbackPage = start >= assignedFromFirestore.length
+              ? <WaybillModel>[]
+              : assignedFromFirestore.sublist(start, end);
+
+          await WaybillService.mergeCachedWaybills(fallbackPage);
+
+          if (!mounted) return;
+
+          setState(() {
+            assignedStats = WaybillStatsModel.fromWaybills(
+              assignedFromFirestore,
+            );
+            assignedWaybills = fallbackPage;
+            _loadedPageCache[pageIndex] = fallbackPage;
+            _pageHasMoreCache[pageIndex] = end < assignedFromFirestore.length;
+            _currentPage = pageIndex;
+            _hasNextPage = end < assignedFromFirestore.length;
+            _usingServerPagination = true;
+            isLoading = false;
+          });
+          return;
+        } catch (fallbackError) {
+          debugPrint(
+            'DRIVER ASSIGNED WAYBILLS FIRESTORE FALLBACK ERROR: $fallbackError',
+          );
+          // The driver can still see locally cached assigned waybills offline.
+        }
       }
     }
 
@@ -177,7 +235,9 @@ class _DriverAssignedWaybillsScreenState
   }
 
   Future<void> openWaybill(WaybillModel waybill) async {
-    final index = WaybillService.getIndexByWaybillNumber(waybill.waybillNumber);
+    final index = await WaybillService.ensureCachedIndex(waybill);
+
+    if (!mounted) return;
 
     if (index == -1) {
       ScaffoldMessenger.of(context).showSnackBar(

@@ -1,9 +1,12 @@
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/app_user_model.dart';
+import '../models/user_stats_model.dart';
+import '../models/waybill_stats_model.dart';
 import '../models/smtp_settings.dart';
 import '../models/waybill_model.dart';
 import '../services/app_user_service.dart';
@@ -33,14 +36,25 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
   static const Color _onSurface = Color(0xFF1A1A2A);
   static const Color _onSurfaceVariant = Color(0xFF5E5A6B);
   static const int _waybillItemsPerPage = 25;
+  static const int _userItemsPerPage = 25;
 
   final userSearchController = TextEditingController();
   final waybillSearchController = TextEditingController();
   List<AppUserModel> users = [];
   List<WaybillModel> waybills = [];
+  UserStatsModel? userStats;
+  WaybillStatsModel? waybillStats;
   String? selectedPage;
   String? openingPage;
+  String? selectedUserRoleFilter;
+  String? selectedWaybillFilter;
   int _waybillCurrentPage = 0;
+  int _userCurrentPage = 0;
+  final List<DocumentSnapshot<Map<String, dynamic>>?> _userPageCursors = [null];
+  final Map<int, List<AppUserModel>> _userPageCache = {};
+  final Map<int, bool> _userPageHasMoreCache = {};
+  bool _userHasNextPage = false;
+  bool _usingServerUserPagination = false;
   bool isLoading = true;
   bool isRebuildingStats = false;
 
@@ -62,27 +76,150 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
 
     var loadedUsers = <AppUserModel>[];
     var loadedWaybills = WaybillService.getAllWaybills(includeDeleted: true);
+    UserStatsModel? loadedUserStats;
+    WaybillStatsModel? loadedWaybillStats;
+    Object? loadWarning;
+
+    final needsUserList = selectedPage == 'users';
+    final needsWaybillList =
+        selectedPage == 'waybills' || selectedPage == 'backup';
 
     if (shouldUseFirestoreData) {
       try {
-        loadedUsers = await AppUserService.getAllUsers();
-        loadedWaybills = await FirestoreWaybillService.getAllWaybills(
-          includeDeleted: true,
-        );
-        await WaybillService.replaceCachedWaybills(loadedWaybills);
-      } catch (_) {
+        loadedUserStats = await AppUserService.getUserStats();
+        loadedUserStats ??= await AppUserService.rebuildUserStats();
+      } catch (error) {
+        debugPrint('SUPER USER STATS LOAD ERROR: $error');
+        loadWarning = error;
+      }
+
+      try {
+        loadedWaybillStats = await FirestoreWaybillService.getWaybillStats();
+        if (needsUserList) {
+          final page = await AppUserService.getUsersPage(
+            limit: _userItemsPerPage,
+            roleFilter: selectedUserRoleFilter,
+          );
+          loadedUsers = page.users;
+          _userPageCursors
+            ..clear()
+            ..add(null);
+          if (page.hasMore) {
+            _userPageCursors.add(page.lastDocument);
+          }
+          _userPageCache
+            ..clear()
+            ..[0] = page.users;
+          _userPageHasMoreCache
+            ..clear()
+            ..[0] = page.hasMore;
+          _userHasNextPage = page.hasMore;
+          _usingServerUserPagination = true;
+        }
+        if (needsWaybillList) {
+          loadedWaybills = await FirestoreWaybillService.getAllWaybills(
+            includeDeleted: true,
+          );
+          await WaybillService.replaceCachedWaybills(loadedWaybills);
+          loadedWaybillStats ??= WaybillStatsModel.fromWaybills(loadedWaybills);
+        }
+      } catch (error) {
+        debugPrint('SUPER USER DATA LOAD ERROR: $error');
+        loadWarning = error;
+        if (needsWaybillList) {
+          loadedWaybills = WaybillService.getAllWaybills(includeDeleted: true);
+        }
+        loadedUserStats ??= UserStatsModel.fromUsers(loadedUsers);
+        loadedWaybillStats ??= WaybillStatsModel.fromWaybills(loadedWaybills);
+      }
+    } else {
+      loadedUserStats = UserStatsModel.fromUsers(loadedUsers);
+      if (needsWaybillList) {
         loadedWaybills = WaybillService.getAllWaybills(includeDeleted: true);
       }
+      loadedWaybillStats = WaybillStatsModel.fromWaybills(loadedWaybills);
     }
 
     if (!mounted) return;
 
     setState(() {
       users = loadedUsers;
+      if (!needsUserList) {
+        _usingServerUserPagination = false;
+        _userHasNextPage = false;
+        _userPageCache.clear();
+        _userPageHasMoreCache.clear();
+        _userPageCursors
+          ..clear()
+          ..add(null);
+      }
       waybills = loadedWaybills;
+      userStats = loadedUserStats;
+      waybillStats = loadedWaybillStats;
       _waybillCurrentPage = 0;
+      _userCurrentPage = 0;
       isLoading = false;
     });
+
+    if (loadWarning != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Some admin data used cached values. Check debug console.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadUsersPage(int pageIndex) async {
+    if (!shouldUseFirestoreData) return;
+
+    final cachedPage = _userPageCache[pageIndex];
+    if (cachedPage != null) {
+      setState(() {
+        users = cachedPage;
+        _userCurrentPage = pageIndex;
+        _userHasNextPage = _userPageHasMoreCache[pageIndex] ?? false;
+        _usingServerUserPagination = true;
+      });
+      return;
+    }
+
+    setState(() => isLoading = true);
+
+    try {
+      final page = await AppUserService.getUsersPage(
+        limit: _userItemsPerPage,
+        startAfterDocument: _userPageCursors[pageIndex],
+        roleFilter: selectedUserRoleFilter,
+      );
+
+      if (page.hasMore && _userPageCursors.length == pageIndex + 1) {
+        _userPageCursors.add(page.lastDocument);
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        users = page.users;
+        _userCurrentPage = pageIndex;
+        _userHasNextPage = page.hasMore;
+        _usingServerUserPagination = true;
+        _userPageCache[pageIndex] = page.users;
+        _userPageHasMoreCache[pageIndex] = page.hasMore;
+        isLoading = false;
+      });
+    } catch (error) {
+      debugPrint('SUPER USER PAGE USERS ERROR: $error');
+      if (!mounted) return;
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not load users page. Check debug console.'),
+        ),
+      );
+    }
   }
 
   Future<void> _logout() async {
@@ -97,7 +234,9 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
   }
 
   Future<void> _openWaybill(WaybillModel waybill) async {
-    final index = WaybillService.getIndexByWaybillNumber(waybill.waybillNumber);
+    final index = await WaybillService.ensureCachedIndex(waybill);
+
+    if (!mounted) return;
 
     await Navigator.push(
       context,
@@ -110,7 +249,9 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
   }
 
   Future<void> _editWaybill(WaybillModel waybill) async {
-    final index = WaybillService.getIndexByWaybillNumber(waybill.waybillNumber);
+    final index = await WaybillService.ensureCachedIndex(waybill);
+
+    if (!mounted) return;
 
     if (index == -1) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -495,20 +636,46 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
   }
 
   Future<void> _copyBackup() async {
-    final backup = {
-      'generatedAt': DateTime.now().toIso8601String(),
-      'waybills': waybills.map((waybill) => waybill.toFirestoreMap()).toList(),
-      'users': users.map((user) => user.toMap()).toList(),
-    };
+    setState(() => isLoading = true);
 
-    const encoder = JsonEncoder.withIndent('  ');
-    await Clipboard.setData(ClipboardData(text: encoder.convert(backup)));
+    try {
+      final backupUsers = shouldUseFirestoreData
+          ? await AppUserService.getAllUsers()
+          : users;
+      final backupWaybills = shouldUseFirestoreData
+          ? await FirestoreWaybillService.getAllWaybills(includeDeleted: true)
+          : waybills;
+      final backup = {
+        'generatedAt': DateTime.now().toIso8601String(),
+        'waybills': backupWaybills
+            .map((waybill) => waybill.toFirestoreMap())
+            .toList(),
+        'users': backupUsers.map((user) => user.toMap()).toList(),
+      };
 
-    if (!mounted) return;
+      const encoder = JsonEncoder.withIndent('  ');
+      await Clipboard.setData(ClipboardData(text: encoder.convert(backup)));
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Backup JSON copied to clipboard')),
-    );
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Backup copied: ${backupWaybills.length} waybills, ${backupUsers.length} users',
+          ),
+        ),
+      );
+    } catch (error) {
+      debugPrint('SUPER USER BACKUP ERROR: $error');
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not copy backup: $error')));
+    } finally {
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
+    }
   }
 
   Future<void> _rebuildWaybillStats() async {
@@ -518,12 +685,15 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
 
     try {
       final stats = await FirestoreWaybillService.rebuildWaybillStats();
+      final rebuiltUserStats = await AppUserService.rebuildUserStats();
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Waybill stats rebuilt: ${stats.total} total waybills'),
+          content: Text(
+            'Stats rebuilt: ${stats.total} waybills, ${rebuiltUserStats.total} users',
+          ),
         ),
       );
     } catch (error) {
@@ -737,6 +907,26 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     }
   }
 
+  Future<void> _openFilteredUsers(String? roleLabel) async {
+    setState(() {
+      selectedPage = 'users';
+      selectedUserRoleFilter = roleLabel;
+      selectedWaybillFilter = null;
+      _userCurrentPage = 0;
+    });
+    await loadAdminData();
+  }
+
+  Future<void> _openFilteredWaybills(String? filter) async {
+    setState(() {
+      selectedPage = 'waybills';
+      selectedWaybillFilter = filter;
+      selectedUserRoleFilter = null;
+      _waybillCurrentPage = 0;
+    });
+    await loadAdminData();
+  }
+
   Future<void> _openSuperUserPage(String page) async {
     if (openingPage != null) return;
 
@@ -748,16 +938,25 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     setState(() {
       selectedPage = page;
       openingPage = null;
+      selectedUserRoleFilter = null;
+      selectedWaybillFilter = null;
+      _userCurrentPage = 0;
+      _waybillCurrentPage = 0;
     });
+
+    await loadAdminData();
   }
 
   @override
   Widget build(BuildContext context) {
-    final activeUsers = users.where((user) => user.isActive).length;
+    final effectiveUserStats = userStats ?? UserStatsModel.fromUsers(users);
+    final effectiveWaybillStats =
+        waybillStats ?? WaybillStatsModel.fromWaybills(waybills);
+    final activeUsers = effectiveUserStats.active;
     final deletedWaybills = waybills
         .where((waybill) => waybill.isDeleted)
         .length;
-    final activeWaybills = waybills.length - deletedWaybills;
+    final activeWaybills = effectiveWaybillStats.total;
 
     Widget body;
     if (selectedPage == 'users') {
@@ -774,41 +973,186 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: _background,
-      appBar: AppBar(
-        backgroundColor: _background.withValues(alpha: 0.92),
-        foregroundColor: _onSurface,
-        elevation: 0,
-        surfaceTintColor: _background,
-        leading: selectedPage == null
-            ? null
-            : IconButton(
-                onPressed: () => setState(() => selectedPage = null),
-                icon: const Icon(Icons.arrow_back),
-                tooltip: 'Back',
-              ),
-        title: Text(
-          _superUserPageTitle(),
-          style: const TextStyle(
-            color: _onSurface,
-            fontWeight: FontWeight.w700,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 920;
+        final sidebar = _superUserSidebar(isWide: isWide);
+
+        return Scaffold(
+          backgroundColor: _background,
+          appBar: isWide
+              ? null
+              : AppBar(
+                  backgroundColor: _background.withValues(alpha: 0.96),
+                  foregroundColor: _onSurface,
+                  elevation: 0,
+                  surfaceTintColor: _background,
+                  title: Text(
+                    _superUserPageTitle(),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  actions: [
+                    IconButton(
+                      onPressed: loadAdminData,
+                      icon: const Icon(Icons.refresh),
+                      tooltip: 'Refresh',
+                    ),
+                    IconButton(
+                      onPressed: _logout,
+                      icon: const Icon(Icons.logout),
+                      tooltip: 'Logout',
+                    ),
+                  ],
+                ),
+          drawer: isWide ? null : Drawer(child: sidebar),
+          body: isWide
+              ? Row(
+                  children: [
+                    SizedBox(width: 250, child: sidebar),
+                    Expanded(child: body),
+                  ],
+                )
+              : body,
+        );
+      },
+    );
+  }
+
+  Widget _superUserSidebar({required bool isWide}) {
+    return SafeArea(
+      child: Container(
+        color: _surface,
+        padding: const EdgeInsets.fromLTRB(14, 16, 14, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: _primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.admin_panel_settings,
+                    color: _primary,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'BAJ E-POD',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text(
+                        'Super User',
+                        style: TextStyle(color: _onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 22),
+            _sidebarItem(
+              label: 'Dashboard',
+              icon: Icons.dashboard_rounded,
+              selected: selectedPage == null,
+              onTap: () => _selectSidebarPage(null),
+            ),
+            _sidebarItem(
+              label: 'User Management',
+              icon: Icons.people_alt_rounded,
+              selected: selectedPage == 'users',
+              onTap: () => _selectSidebarPage('users'),
+            ),
+            _sidebarItem(
+              label: 'Waybill Management',
+              icon: Icons.receipt_long_rounded,
+              selected: selectedPage == 'waybills',
+              onTap: () => _selectSidebarPage('waybills'),
+            ),
+            _sidebarItem(
+              label: 'Backup',
+              icon: Icons.backup_rounded,
+              selected: selectedPage == 'backup',
+              onTap: () => _selectSidebarPage('backup'),
+            ),
+            const Spacer(),
+            OutlinedButton.icon(
+              onPressed: loadAdminData,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Refresh'),
+            ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: _logout,
+              icon: const Icon(Icons.logout),
+              label: const Text('Logout'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _selectSidebarPage(String? page) async {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
+    setState(() {
+      selectedPage = page;
+      selectedUserRoleFilter = null;
+      selectedWaybillFilter = null;
+      _userCurrentPage = 0;
+      _waybillCurrentPage = 0;
+    });
+
+    await loadAdminData();
+  }
+
+  Widget _sidebarItem({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: selected ? _primary.withValues(alpha: 0.12) : Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            child: Row(
+              children: [
+                Icon(icon, color: selected ? _primary : _onSurfaceVariant),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: selected ? _primary : _onSurface,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        actions: [
-          IconButton(
-            onPressed: loadAdminData,
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh',
-          ),
-          IconButton(
-            onPressed: _logout,
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-          ),
-        ],
       ),
-      body: body,
     );
   }
 
@@ -839,21 +1183,25 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
             activeUsers: activeUsers,
             activeWaybills: activeWaybills,
           ),
+          const SizedBox(height: 18),
+          _superUserSummaryStrip(),
           const SizedBox(height: 22),
           LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth >= 900;
               final actionCards = [
                 _adminPageCard(
-                  title: 'Users',
+                  title: 'Add User',
                   subtitle: isLoading
                       ? 'Loading users...'
                       : '$activeUsers active users',
-                  badge: isLoading ? 'Please wait' : '${users.length} total',
-                  icon: Icons.people,
+                  badge: isLoading
+                      ? 'Please wait'
+                      : '${userStats?.total ?? users.length} total',
+                  icon: Icons.person_add_alt_1,
                   color: _primary,
-                  isOpening: openingPage == 'users',
-                  onTap: () => _openSuperUserPage('users'),
+                  isOpening: false,
+                  onTap: _showAddUserDialog,
                 ),
                 _adminPageCard(
                   title: 'Waybills',
@@ -924,6 +1272,217 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
             },
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _superUserSummaryStrip() {
+    final users = userStats ?? UserStatsModel.fromUsers(this.users);
+    final bills = waybillStats ?? WaybillStatsModel.fromWaybills(waybills);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _summarySectionTitle('Waybills'),
+        _summaryCardWrap([
+          _superSummaryCard(
+            title: 'Total Waybills',
+            value: bills.total.toString(),
+            icon: Icons.receipt_long,
+            color: Colors.indigo,
+            onTap: () => _openFilteredWaybills(null),
+          ),
+          _superSummaryCard(
+            title: 'Pending',
+            value: bills.pendingDelivery.toString(),
+            icon: Icons.schedule,
+            color: Colors.orange,
+            onTap: () => _openFilteredWaybills('pending'),
+          ),
+          _superSummaryCard(
+            title: 'Delivered',
+            value: bills.delivered.toString(),
+            icon: Icons.local_shipping,
+            color: Colors.blue,
+            onTap: () => _openFilteredWaybills('delivered'),
+          ),
+          _superSummaryCard(
+            title: 'Sent for Invoicing',
+            value: bills.sentForInvoicing.toString(),
+            icon: Icons.outbox,
+            color: Colors.deepPurple,
+            onTap: () => _openFilteredWaybills('sentForInvoicing'),
+          ),
+          _superSummaryCard(
+            title: 'Invoiced',
+            value: bills.invoiced.toString(),
+            icon: Icons.done_all,
+            color: Colors.green,
+            onTap: () => _openFilteredWaybills('invoiced'),
+          ),
+          _superSummaryCard(
+            title: 'Rejected',
+            value: bills.rejected.toString(),
+            icon: Icons.report_problem,
+            color: Colors.red,
+            onTap: () => _openFilteredWaybills('rejected'),
+          ),
+        ]),
+        const SizedBox(height: 20),
+        _summarySectionTitle('Users'),
+        _summaryCardWrap([
+          _superSummaryCard(
+            title: 'Super User',
+            value: users.superUsers.toString(),
+            icon: Icons.admin_panel_settings,
+            color: _primary,
+            onTap: () => _openFilteredUsers('Super User'),
+          ),
+          _superSummaryCard(
+            title: 'Officer',
+            value: users.officers.toString(),
+            icon: Icons.assignment_ind,
+            color: Colors.indigo,
+            onTap: () => _openFilteredUsers('Officer'),
+          ),
+          _superSummaryCard(
+            title: 'Driver',
+            value: users.drivers.toString(),
+            icon: Icons.local_shipping,
+            color: Colors.blue,
+            onTap: () => _openFilteredUsers('Driver'),
+          ),
+          _superSummaryCard(
+            title: 'Account',
+            value: users.accounts.toString(),
+            icon: Icons.receipt_long,
+            color: Colors.green,
+            onTap: () => _openFilteredUsers('Accounts'),
+          ),
+          _superSummaryCard(
+            title: 'Management',
+            value: users.management.toString(),
+            icon: Icons.insights,
+            color: Colors.orange,
+            onTap: () => _openFilteredUsers('Management'),
+          ),
+          _superSummaryCard(
+            title: 'Manager',
+            value: users.managers.toString(),
+            icon: Icons.manage_accounts,
+            color: Colors.red,
+            onTap: () => _openFilteredUsers('Manager'),
+          ),
+        ]),
+      ],
+    );
+  }
+
+  Widget _summarySectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text(
+        title,
+        style: const TextStyle(
+          color: _onSurface,
+          fontSize: 20,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+
+  Widget _summaryCardWrap(List<Widget> cards) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 1180
+            ? 6
+            : (constraints.maxWidth >= 760 ? 3 : 1);
+        const spacing = 12.0;
+        final itemWidth =
+            (constraints.maxWidth - (spacing * (columns - 1))) / columns;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final card in cards) SizedBox(width: itemWidth, child: card),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _superSummaryCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: _surface,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Container(
+          height: 108,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: color.withValues(alpha: 0.28)),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.06),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.13),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Icon(icon, color: color, size: 25),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      value,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 23,
+                        fontWeight: FontWeight.w900,
+                        height: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _onSurface,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: color),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1172,6 +1731,11 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
   Widget _buildUsersTab(int activeUsers) {
     final filteredUsers = _filteredUsers();
     final usersByRole = _groupUsersByRole(filteredUsers);
+    final shouldPaginate = _usingServerUserPagination
+        ? (_userCurrentPage > 0 || _userHasNextPage)
+        : filteredUsers.length > _userItemsPerPage;
+    final visibleCount = filteredUsers.length;
+    final roleFilter = selectedUserRoleFilter;
 
     return RefreshIndicator(
       onRefresh: loadAdminData,
@@ -1179,10 +1743,10 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
         padding: const EdgeInsets.all(16),
         children: [
           _summaryHeader(
-            title: 'User Management',
+            title: roleFilter == null ? 'User Management' : '$roleFilter Users',
             subtitle: isLoading
                 ? 'Loading users...'
-                : '$activeUsers active of ${users.length} total users',
+                : '$activeUsers active of ${userStats?.total ?? users.length} total users',
             icon: Icons.admin_panel_settings,
             action: FilledButton.icon(
               onPressed: _showAddUserDialog,
@@ -1190,6 +1754,17 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
               label: const Text('Add User'),
             ),
           ),
+          if (roleFilter != null) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: InputChip(
+                label: Text('Filter: $roleFilter'),
+                avatar: const Icon(Icons.filter_alt, size: 18),
+                onDeleted: () => _openFilteredUsers(null),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           _buildUserSearchBox(),
           const SizedBox(height: 12),
@@ -1206,15 +1781,88 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
             const Card(
               child: Padding(
                 padding: EdgeInsets.all(18),
-                child: Text('No users match your search.'),
+                child: Text('No users match this filter.'),
               ),
             )
-          else
+          else ...[
             for (final entry in usersByRole.entries)
               _buildRoleUserSection(
                 roleLabel: entry.key,
                 roleUsers: entry.value,
               ),
+            if (shouldPaginate) ...[
+              const SizedBox(height: 12),
+              _buildUserPaginationControls(
+                totalItems: userStats?.total ?? filteredUsers.length,
+                visibleCount: visibleCount,
+                totalPages: 0,
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUserPaginationControls({
+    required int totalItems,
+    required int visibleCount,
+    required int totalPages,
+  }) {
+    final start = (_userCurrentPage * _userItemsPerPage) + 1;
+    final end = ((_userCurrentPage * _userItemsPerPage) + visibleCount).clamp(
+      0,
+      totalItems,
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _outline.withValues(alpha: 0.7)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              _usingServerUserPagination
+                  ? 'Showing $visibleCount users on page ${_userCurrentPage + 1}'
+                  : 'Showing $start-$end of $totalItems users',
+              style: const TextStyle(
+                color: _onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          IconButton.filledTonal(
+            tooltip: 'Previous page',
+            onPressed: _userCurrentPage == 0
+                ? null
+                : () => _usingServerUserPagination
+                      ? _loadUsersPage(_userCurrentPage - 1)
+                      : setState(() => _userCurrentPage--),
+            icon: const Icon(Icons.chevron_left),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            _usingServerUserPagination
+                ? 'Page ${_userCurrentPage + 1}'
+                : 'Page ${_userCurrentPage + 1} of $totalPages',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(width: 8),
+          IconButton.filledTonal(
+            tooltip: 'Next page',
+            onPressed: _usingServerUserPagination
+                ? (_userHasNextPage
+                      ? () => _loadUsersPage(_userCurrentPage + 1)
+                      : null)
+                : (_userCurrentPage >= totalPages - 1
+                      ? null
+                      : () => setState(() => _userCurrentPage++)),
+            icon: const Icon(Icons.chevron_right),
+          ),
         ],
       ),
     );
@@ -1223,7 +1871,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
   Widget _buildUserSearchBox() {
     return TextField(
       controller: userSearchController,
-      onChanged: (_) => setState(() => _waybillCurrentPage = 0),
+      onChanged: (_) => setState(() => _userCurrentPage = 0),
       decoration: InputDecoration(
         hintText: 'Search users by name, email or role',
         prefixIcon: const Icon(Icons.search),
@@ -1260,9 +1908,13 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
 
   List<AppUserModel> _filteredUsers() {
     final searchText = userSearchController.text.trim().toLowerCase();
-    if (searchText.isEmpty) return users;
+    final roleFilter = selectedUserRoleFilter;
+    final sourceUsers = roleFilter == null
+        ? users
+        : users.where((user) => _roleLabel(user.role) == roleFilter).toList();
+    if (searchText.isEmpty) return sourceUsers;
 
-    return users.where((user) {
+    return sourceUsers.where((user) {
       final displayName = user.fullName.isEmpty ? user.email : user.fullName;
       final roleLabel = _roleLabel(user.role);
 
@@ -1400,6 +2052,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     );
     final visibleWaybills = filteredWaybills.sublist(pageStart, pageEnd);
     final shouldPaginate = filteredWaybills.length > _waybillItemsPerPage;
+    final waybillFilterLabel = _waybillFilterLabel(selectedWaybillFilter);
 
     return RefreshIndicator(
       onRefresh: loadAdminData,
@@ -1407,12 +2060,28 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
         padding: const EdgeInsets.all(16),
         children: [
           _summaryHeader(
-            title: 'Waybill Management',
+            title: waybillFilterLabel == null
+                ? 'Waybill Management'
+                : '$waybillFilterLabel Waybills',
             subtitle: isLoading
                 ? 'Loading waybills...'
                 : '${waybills.length - deletedWaybills} active, $deletedWaybills deleted',
             icon: Icons.receipt_long,
           ),
+          if (waybillFilterLabel != null) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: InputChip(
+                label: Text('Filter: $waybillFilterLabel'),
+                avatar: const Icon(Icons.filter_alt, size: 18),
+                onDeleted: () => setState(() {
+                  selectedWaybillFilter = null;
+                  _waybillCurrentPage = 0;
+                }),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           _buildWaybillSearchBox(),
           const SizedBox(height: 12),
@@ -1550,16 +2219,54 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
 
   List<WaybillModel> _filteredWaybills() {
     final searchText = waybillSearchController.text.trim().toLowerCase();
-    if (searchText.isEmpty) return waybills;
+    final categoryFiltered = waybills.where((waybill) {
+      switch (selectedWaybillFilter) {
+        case 'pending':
+          return waybill.status == WaybillService.pendingDeliveryStatus &&
+              waybill.invoiceStatus != WaybillService.invoiceRejectedStatus;
+        case 'delivered':
+          return waybill.status == WaybillService.deliveredStatus &&
+              waybill.invoiceStatus != WaybillService.invoiceRejectedStatus;
+        case 'sentForInvoicing':
+          return waybill.invoiceStatus == WaybillService.invoiceSentStatus;
+        case 'invoiced':
+          return waybill.status == WaybillService.invoicedStatus &&
+              waybill.invoiceStatus != WaybillService.invoiceRejectedStatus;
+        case 'rejected':
+          return waybill.invoiceStatus == WaybillService.invoiceRejectedStatus;
+        default:
+          return true;
+      }
+    }).toList();
 
-    return waybills.where((waybill) {
+    if (searchText.isEmpty) return categoryFiltered;
+
+    return categoryFiltered.where((waybill) {
       return waybill.waybillNumber.toLowerCase().contains(searchText) ||
           waybill.bajNumber.toLowerCase().contains(searchText) ||
           waybill.shippingVendor.toLowerCase().contains(searchText) ||
           waybill.consigneeReceiver.toLowerCase().contains(searchText) ||
           waybill.driverName.toLowerCase().contains(searchText) ||
+          waybill.invoiceStatus.toLowerCase().contains(searchText) ||
           waybill.status.toLowerCase().contains(searchText);
     }).toList();
+  }
+
+  String? _waybillFilterLabel(String? filter) {
+    switch (filter) {
+      case 'pending':
+        return 'Pending';
+      case 'delivered':
+        return 'Delivered';
+      case 'sentForInvoicing':
+        return 'Sent for Invoicing';
+      case 'invoiced':
+        return 'Invoiced';
+      case 'rejected':
+        return 'Rejected';
+      default:
+        return null;
+    }
   }
 
   Widget _buildWaybillCards(List<WaybillModel> sourceWaybills) {
@@ -1779,7 +2486,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
               children: [
                 Text('Waybills: ${waybills.length}'),
                 const SizedBox(height: 8),
-                Text('Users: ${users.length}'),
+                Text('Users: ${userStats?.total ?? users.length}'),
                 const SizedBox(height: 8),
                 Text(_backupSourceText()),
               ],
