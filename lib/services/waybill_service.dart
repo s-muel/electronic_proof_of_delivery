@@ -84,18 +84,6 @@ class WaybillService {
 
   static Future<void> mergeCachedWaybills(List<WaybillModel> waybills) async {
     for (final waybill in _uniqueByWaybillNumber(waybills)) {
-      final existingIndex = getIndexByWaybillNumber(waybill.waybillNumber);
-      if (existingIndex >= 0 && existingIndex < _box.length) {
-        final existingMap = Map<String, dynamic>.from(
-          _box.getAt(existingIndex) as Map,
-        );
-        final existingWaybill = WaybillModel.fromMap(existingMap);
-
-        if (existingWaybill.status == pendingSyncStatus) {
-          continue;
-        }
-      }
-
       await updateWaybillByNumber(waybill);
     }
   }
