@@ -140,6 +140,20 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
   }
 
   void editWaybill(int index, WaybillModel waybill) async {
+    if (index == -1) {
+      index = await WaybillService.ensureCachedIndex(waybill);
+    }
+
+    if (!mounted) return;
+
+    if (index == -1) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not find this waybill record')),
+      );
+      return;
+    }
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -153,6 +167,20 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
   }
 
   void openWaybillDetails(int index, WaybillModel waybill) async {
+    if (index == -1) {
+      index = await WaybillService.ensureCachedIndex(waybill);
+    }
+
+    if (!mounted) return;
+
+    if (index == -1) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not find this waybill record')),
+      );
+      return;
+    }
+
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -220,13 +248,47 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
       }
 
       allWaybills = _applyScreenFilter(page.waybills);
+      await WaybillService.mergeCachedWaybills(allWaybills);
       _hasNextPage = page.hasMore;
       _loadedPageCache[pageIndex] = allWaybills;
       _pageHasMoreCache[pageIndex] = page.hasMore;
       _usingLocalCache = false;
       _localTotalItems = 0;
-    } catch (_) {
-      _loadLocalPage(userId, pageIndex);
+    } catch (error) {
+      debugPrint('OFFICER WAYBILL PAGE QUERY ERROR: $error');
+      try {
+        final officerWaybills =
+            await FirestoreWaybillService.getWaybillsCreatedBy(userId);
+        final filteredOfficerWaybills = _applyScreenFilter(officerWaybills);
+        final start = pageIndex * _itemsPerPage;
+        final end = (start + _itemsPerPage).clamp(
+          0,
+          filteredOfficerWaybills.length,
+        );
+
+        allWaybills = start >= filteredOfficerWaybills.length
+            ? const []
+            : filteredOfficerWaybills.sublist(start, end);
+        await WaybillService.mergeCachedWaybills(allWaybills);
+        _hasNextPage = end < filteredOfficerWaybills.length;
+        _loadedPageCache[pageIndex] = allWaybills;
+        _pageHasMoreCache[pageIndex] = _hasNextPage;
+        _usingLocalCache = false;
+        _localTotalItems = filteredOfficerWaybills.length;
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Waybills loaded. Check debug console for query details.',
+              ),
+            ),
+          );
+        }
+      } catch (fallbackError) {
+        debugPrint('OFFICER WAYBILL FALLBACK ERROR: $fallbackError');
+        _loadLocalPage(userId, pageIndex);
+      }
     }
 
     if (!mounted) return;

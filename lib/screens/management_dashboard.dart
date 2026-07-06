@@ -859,6 +859,7 @@ class _ManagementWaybillListScreenState
 
       currentPageWaybills = page.waybills;
       filteredWaybills = page.waybills;
+      await WaybillService.mergeCachedWaybills(page.waybills);
       _hasNextPage = page.hasMore;
       _loadedPageCache[pageIndex] = page.waybills;
       _pageHasMoreCache[pageIndex] = page.hasMore;
@@ -868,7 +869,8 @@ class _ManagementWaybillListScreenState
         final stats = await FirestoreWaybillService.getWaybillStats();
         _serverTotalWaybills = _totalFromStats(stats);
       }
-    } catch (_) {
+    } catch (error) {
+      debugPrint('MANAGEMENT WAYBILL PAGE QUERY ERROR: $error');
       _loadLocalPage(pageIndex);
     }
 
@@ -898,15 +900,29 @@ class _ManagementWaybillListScreenState
   }
 
   Future<void> openWaybill(WaybillModel waybill) async {
-    final index = WaybillService.getIndexByWaybillNumber(waybill.waybillNumber);
+    var index = WaybillService.getIndexByWaybillNumber(waybill.waybillNumber);
 
     if (index == -1) {
+      debugPrint(
+        'WAYBILL OPEN CACHE MISS: ${waybill.waybillNumber} was loaded from Firestore but not found in Hive. Caching now.',
+      );
+      await WaybillService.mergeCachedWaybills([waybill]);
+      index = WaybillService.getIndexByWaybillNumber(waybill.waybillNumber);
+    }
+
+    if (index == -1) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not find this waybill record')),
+        SnackBar(
+          content: Text(
+            'Could not open ${waybill.waybillNumber}. Check debug console.',
+          ),
+        ),
       );
       return;
     }
 
+    if (!mounted) return;
     await Navigator.push(
       context,
       MaterialPageRoute(
