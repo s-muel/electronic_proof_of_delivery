@@ -280,27 +280,37 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
         updatedAt: now,
       );
 
-      await WaybillService.updateWaybillByNumber(updatedWaybill);
+      var savedWaybill = updatedWaybill;
+      var deliveryReadyForSharing = uploadedOnline;
+
+      await WaybillService.updateWaybillByNumber(savedWaybill);
       if (uploadedOnline && shouldUseFirestoreData) {
         try {
-          await FirestoreWaybillService.updateWaybill(updatedWaybill);
-        } catch (_) {
-          // Local delivery remains saved; sync can be retried later.
+          await FirestoreWaybillService.updateWaybill(savedWaybill);
+        } catch (error) {
+          debugPrint('DELIVERY FIRESTORE UPDATE ERROR: $error');
+          savedWaybill = savedWaybill.copyWith(
+            status: WaybillService.pendingSyncStatus,
+            syncStatus: 'Pending',
+            updatedAt: DateTime.now().toIso8601String(),
+          );
+          deliveryReadyForSharing = false;
+          await WaybillService.updateWaybillByNumber(savedWaybill);
         }
       }
 
       final receiverEmail = receiverEmailController.text.trim();
       final receiverPhone = receiverPhoneController.text.trim();
       DeliveryEmailResult? emailResult;
-      if (uploadedOnline && receiverEmail.isNotEmpty) {
+      if (deliveryReadyForSharing && receiverEmail.isNotEmpty) {
         emailResult = await DeliveryEmailService.sendSignedWaybill(
-          waybill: updatedWaybill,
+          waybill: savedWaybill,
           receiverEmail: receiverEmail,
         );
       }
 
       WhatsAppShareResult? whatsappResult;
-      if (uploadedOnline && receiverPhone.isNotEmpty) {
+      if (deliveryReadyForSharing && receiverPhone.isNotEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -310,7 +320,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
         );
 
         whatsappResult = await WhatsAppShareService.shareWaybillPdfToPhone(
-          waybill: updatedWaybill,
+          waybill: savedWaybill,
           receiverPhone: receiverPhone,
           receiverSignatureBytes: receiverSignatureBytes,
           driverSignatureBytes: driverSignatureBytes,
@@ -324,7 +334,7 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
         SnackBar(
           content: Text(
             _deliveryResultMessage(
-              uploadedOnline: uploadedOnline,
+              uploadedOnline: deliveryReadyForSharing,
               emailResult: emailResult,
               whatsappResult: whatsappResult,
               phoneProvided: receiverPhone.isNotEmpty,
