@@ -26,6 +26,17 @@ class WaybillService {
     );
   }
 
+  static Future<int> ensureCachedIndex(WaybillModel waybill) async {
+    var index = getIndexByWaybillNumber(waybill.waybillNumber);
+
+    if (index == -1) {
+      await updateWaybillByNumber(waybill);
+      index = getIndexByWaybillNumber(waybill.waybillNumber);
+    }
+
+    return index;
+  }
+
   static List<WaybillModel> getAllWaybills({bool includeDeleted = false}) {
     final waybills = _box.values.map((item) {
       final map = Map<String, dynamic>.from(item as Map);

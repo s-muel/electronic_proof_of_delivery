@@ -1051,6 +1051,12 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
 
   void openWaybillDetails(int index, WaybillModel waybill) async {
     if (index == -1) {
+      index = await WaybillService.ensureCachedIndex(waybill);
+    }
+
+    if (!mounted) return;
+
+    if (index == -1) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not find this waybill record')),
       );
@@ -1100,28 +1106,28 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
     }
   }
 
-  Future<void> _saveInvoiceUpdate(WaybillModel updatedWaybill) async {
-    final index = WaybillService.getIndexByWaybillNumber(
-      updatedWaybill.waybillNumber,
-    );
+  Future<bool> _saveInvoiceUpdate(WaybillModel updatedWaybill) async {
+    await WaybillService.updateWaybillByNumber(updatedWaybill);
 
-    if (index == -1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not find this waybill record')),
-      );
-      return;
-    }
-
-    await WaybillService.updateWaybill(index, updatedWaybill);
     if (shouldUseFirestoreData) {
       try {
         await FirestoreWaybillService.updateWaybill(updatedWaybill);
-      } catch (_) {
-        // Keep the local invoice update if Firestore is temporarily unavailable.
+      } catch (error) {
+        debugPrint('ACCOUNT INVOICE UPDATE ERROR: $error');
+        if (!mounted) return false;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Invoice update saved locally but could not sync: $error',
+            ),
+          ),
+        );
+        return false;
       }
     }
 
-    if (!mounted) return;
+    if (!mounted) return true;
 
     setState(() {
       allWaybills.removeWhere(
@@ -1136,6 +1142,8 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
         _currentPage = totalPages - 1;
       }
     });
+
+    return true;
   }
 
   Future<String> _invoiceUpdatedBy() async {
@@ -1156,9 +1164,9 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
       updatedAt: now,
     );
 
-    await _saveInvoiceUpdate(updatedWaybill);
+    final saved = await _saveInvoiceUpdate(updatedWaybill);
 
-    if (!mounted) return;
+    if (!saved || !mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Waybill marked as sent for invoicing')),
     );
@@ -1176,9 +1184,9 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
       updatedAt: now,
     );
 
-    await _saveInvoiceUpdate(updatedWaybill);
+    final saved = await _saveInvoiceUpdate(updatedWaybill);
 
-    if (!mounted) return;
+    if (!saved || !mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Waybill marked as invoiced')));
@@ -1194,9 +1202,9 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
       updatedAt: now,
     );
 
-    await _saveInvoiceUpdate(updatedWaybill);
+    final saved = await _saveInvoiceUpdate(updatedWaybill);
 
-    if (!mounted) return;
+    if (!saved || !mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Waybill marked as rejected')));
