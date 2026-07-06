@@ -197,9 +197,12 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     final fullNameController = TextEditingController();
     final emailController = TextEditingController();
     final passwordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
     var selectedRole = 'officer';
+    var selectedDepartment = 'Transport';
     var isSaving = false;
     var obscurePassword = true;
+    var obscureConfirmPassword = true;
 
     final userCreated = await showDialog<bool>(
       context: context,
@@ -244,33 +247,6 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                           },
                         ),
                         const SizedBox(height: 12),
-                        TextFormField(
-                          controller: passwordController,
-                          obscureText: obscurePassword,
-                          decoration: InputDecoration(
-                            labelText: 'Temporary Password',
-                            border: const OutlineInputBorder(),
-                            suffixIcon: IconButton(
-                              onPressed: () {
-                                setDialogState(
-                                  () => obscurePassword = !obscurePassword,
-                                );
-                              },
-                              icon: Icon(
-                                obscurePassword
-                                    ? Icons.visibility
-                                    : Icons.visibility_off,
-                              ),
-                            ),
-                          ),
-                          validator: (value) {
-                            if ((value ?? '').length < 6) {
-                              return 'Use at least 6 characters';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
                           initialValue: selectedRole,
                           decoration: const InputDecoration(
@@ -309,6 +285,107 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                             }
                           },
                         ),
+                        if (selectedRole != 'management') ...[
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            initialValue: selectedDepartment,
+                            decoration: const InputDecoration(
+                              labelText: 'Department',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'Transport',
+                                child: Text('Transport'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'CNF',
+                                child: Text('CNF'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Shipping',
+                                child: Text('Shipping'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'HeavyLift',
+                                child: Text('HeavyLift'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'QHSSE',
+                                child: Text('QHSSE'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Accounts',
+                                child: Text('Accounts'),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) {
+                                setDialogState(
+                                  () => selectedDepartment = value,
+                                );
+                              }
+                            },
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: passwordController,
+                          obscureText: obscurePassword,
+                          decoration: InputDecoration(
+                            labelText: 'Temporary Password',
+                            border: const OutlineInputBorder(),
+                            suffixIcon: IconButton(
+                              onPressed: () {
+                                setDialogState(
+                                  () => obscurePassword = !obscurePassword,
+                                );
+                              },
+                              icon: Icon(
+                                obscurePassword
+                                    ? Icons.visibility
+                                    : Icons.visibility_off,
+                              ),
+                            ),
+                          ),
+                          validator: (value) {
+                            if ((value ?? '').length < 6) {
+                              return 'Use at least 6 characters';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: confirmPasswordController,
+                          obscureText: obscureConfirmPassword,
+                          decoration: InputDecoration(
+                            labelText: 'Confirm Password',
+                            border: const OutlineInputBorder(),
+                            suffixIcon: IconButton(
+                              onPressed: () {
+                                setDialogState(
+                                  () => obscureConfirmPassword =
+                                      !obscureConfirmPassword,
+                                );
+                              },
+                              icon: Icon(
+                                obscureConfirmPassword
+                                    ? Icons.visibility
+                                    : Icons.visibility_off,
+                              ),
+                            ),
+                          ),
+                          validator: (value) {
+                            if ((value ?? '').isEmpty) {
+                              return 'Confirm password is required';
+                            }
+                            if (value != passwordController.text) {
+                              return 'Passwords do not match';
+                            }
+                            return null;
+                          },
+                        ),
                       ],
                     ),
                   ),
@@ -335,6 +412,9 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                               email: emailController.text,
                               password: passwordController.text,
                               role: selectedRole,
+                              department: selectedRole == 'management'
+                                  ? ''
+                                  : selectedDepartment,
                             );
 
                             if (!dialogContext.mounted) return;
@@ -368,6 +448,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     fullNameController.dispose();
     emailController.dispose();
     passwordController.dispose();
+    confirmPasswordController.dispose();
 
     if (userCreated == true) {
       await loadAdminData();
@@ -1188,7 +1269,8 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
       return displayName.toLowerCase().contains(searchText) ||
           user.email.toLowerCase().contains(searchText) ||
           roleLabel.toLowerCase().contains(searchText) ||
-          user.role.toLowerCase().contains(searchText);
+          user.role.toLowerCase().contains(searchText) ||
+          user.department.toLowerCase().contains(searchText);
     }).toList();
   }
 
@@ -1249,13 +1331,21 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
   }
 
   Widget _buildUserTile(AppUserModel user) {
+    final detailLines = <String>[
+      user.email,
+      "Status: ${user.isActive ? 'Active' : 'Inactive'}",
+      if (user.department.trim().isNotEmpty)
+        "Department: ${user.department.trim()}",
+      if (user.tempPass.trim().isNotEmpty) "Temp Pass: ${user.tempPass.trim()}",
+    ];
+
     return ListTile(
       leading: CircleAvatar(
         child: Icon(user.isActive ? Icons.person : Icons.person_off),
       ),
       title: Text(user.fullName.isEmpty ? user.email : user.fullName),
-      subtitle: Text('${user.email}\n${user.isActive ? 'Active' : 'Inactive'}'),
-      isThreeLine: true,
+      subtitle: Text(detailLines.join('\n')),
+      isThreeLine: detailLines.length > 2,
       trailing: Wrap(
         spacing: 4,
         children: [

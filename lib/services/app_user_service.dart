@@ -52,6 +52,7 @@ class AppUserService {
     required String email,
     required String password,
     required String role,
+    String department = '',
   }) async {
     final secondaryAuth = await _getSecondaryAuth();
 
@@ -77,6 +78,8 @@ class AppUserService {
         fullName: fullName.trim(),
         email: email.trim(),
         role: role.trim(),
+        department: department.trim(),
+        tempPass: password,
         isActive: true,
         createdAt: now,
         updatedAt: now,
