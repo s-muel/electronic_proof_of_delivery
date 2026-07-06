@@ -70,6 +70,7 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
   }
 
   bool isSyncing = false;
+  String officerName = '';
 
   @override
   void initState() {
