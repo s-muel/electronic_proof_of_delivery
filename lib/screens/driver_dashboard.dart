@@ -75,8 +75,11 @@ class _DriverDashboardState extends State<DriverDashboard> {
       return;
     }
 
+    WaybillStatsModel? stats;
+    Object? statsError;
+
     try {
-      var stats = await FirestoreWaybillService.getAssignedDriverWaybillStats(
+      stats = await FirestoreWaybillService.getAssignedDriverWaybillStats(
         driverId,
       );
       if (_hasInvalidStats(stats)) {
@@ -84,7 +87,12 @@ class _DriverDashboardState extends State<DriverDashboard> {
           driverId,
         );
       }
+    } catch (error) {
+      statsError = error;
+      debugPrint('DRIVER STATS LOAD ERROR: $error');
+    }
 
+    try {
       final page =
           await FirestoreWaybillService.getWaybillsAssignedToDriverPage(
             driverId,
@@ -99,14 +107,51 @@ class _DriverDashboardState extends State<DriverDashboard> {
         pendingWaybills = page.waybills;
         pendingSyncWaybills =
             WaybillService.getPendingSyncWaybillsAssignedToDriver(driverId);
-        pendingDeliveryCount = stats?.pendingDelivery ?? pendingWaybills.length;
-        assignedWaybillCount =
-            stats?.total ??
-            WaybillService.getWaybillsAssignedToDriver(driverId).length;
+        pendingDeliveryCount = stats?.pendingDelivery ?? page.waybills.length;
+        assignedWaybillCount = stats?.total ?? page.waybills.length;
       });
-    } catch (_) {
-      if (!mounted) return;
-      loadPendingWaybills();
+
+      if (statsError != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Driver stats unavailable: $statsError')),
+        );
+      }
+    } catch (error) {
+      debugPrint('DRIVER WAYBILL QUERY ERROR: $error');
+      try {
+        final assignedWaybills =
+            await FirestoreWaybillService.getWaybillsAssignedToDriver(driverId);
+        final pendingAssignedWaybills = assignedWaybills
+            .where(
+              (waybill) =>
+                  waybill.status == WaybillService.pendingDeliveryStatus,
+            )
+            .take(25)
+            .toList();
+        await WaybillService.mergeCachedWaybills(assignedWaybills);
+
+        if (!mounted) return;
+
+        setState(() {
+          pendingWaybills = pendingAssignedWaybills;
+          pendingSyncWaybills =
+              WaybillService.getPendingSyncWaybillsAssignedToDriver(driverId);
+          pendingDeliveryCount =
+              stats?.pendingDelivery ?? pendingAssignedWaybills.length;
+          assignedWaybillCount = stats?.total ?? assignedWaybills.length;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Driver data loaded with fallback: $error')),
+        );
+      } catch (fallbackError) {
+        debugPrint('DRIVER WAYBILL FALLBACK ERROR: $fallbackError');
+        if (!mounted) return;
+        loadPendingWaybills();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load driver data: $fallbackError')),
+        );
+      }
     }
   }
 
