@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "100659409017",
-    "project_id": "baj-epod",
-    "storage_bucket": "baj-epod.firebasestorage.app"
+    "project_number": "81968705855",
+    "project_id": "bajfreight-system",
+    "storage_bucket": "bajfreight-system.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:100659409017:android:92df72e0495cec917ce4a8",
+        "mobilesdk_app_id": "1:81968705855:android:2569bfa50f1ca4fd39a38a",
         "android_client_info": {
           "package_name": "com.example.e_pod"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyAUmMGwuGsQuG2R4dWTJddSekVP3c5iWU0"
+          "current_key": "AIzaSyAduDoBbwrQz9Fz1Y18n5cg11yvF9VcceQ"
         }
       ],
       "services": {
