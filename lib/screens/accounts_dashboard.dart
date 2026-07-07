@@ -1,10 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import '../models/waybill_model.dart';
 import '../models/waybill_stats_model.dart';
 import '../services/delivery_sync_service.dart';
 import '../services/firebase_auth_service.dart';
 import '../services/firestore_waybill_service.dart';
+import '../services/pdf_service.dart';
 import '../services/waybill_service.dart';
 import '../utils/platform_flags.dart';
 import 'login_screen.dart';
@@ -58,6 +60,17 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
   }
 
   Future<void> loadWaybills() async {
+    final firebaseUser = FirebaseAuthService.currentFirebaseUser;
+    var loadedAccountName =
+        firebaseUser?.displayName ?? firebaseUser?.email ?? '';
+
+    try {
+      final profile = await FirebaseAuthService.getCurrentUserProfile();
+      loadedAccountName = profile?.fullName ?? loadedAccountName;
+    } catch (_) {
+      // Use Firebase Auth display data if the profile cannot be refreshed.
+    }
+
     if (shouldUseFirestoreData) {
       try {
         dashboardStats = await FirestoreWaybillService.getWaybillStats();
@@ -74,6 +87,7 @@ class _AccountsDashboardState extends State<AccountsDashboard> {
     if (!mounted) return;
 
     setState(() {
+      accountName = loadedAccountName;
       pendingWaybills = WaybillService.getPendingWaybills();
       deliveredWaybills = WaybillService.getReadyForInvoiceWaybills();
       sentForInvoicingWaybills = WaybillService.getSentForInvoicingWaybills();
@@ -1319,6 +1333,8 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
     const Color pageColor = Colors.blue;
     final IconData pageIcon = widget.showMarkInvoicedButton
         ? Icons.receipt_long
+        : widget.showFullSummary
+        ? Icons.visibility
         : Icons.done_all;
     final stats = _summaryStats;
     final pendingCount =
@@ -1444,6 +1460,8 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
                           Text(
                             widget.showMarkInvoicedButton
                                 ? 'Delivered waybills waiting for invoice processing.'
+                                : widget.showFullSummary
+                                ? 'Summary of all waybills in the system.'
                                 : 'Waybills already marked as invoiced.',
                             style: const TextStyle(color: Colors.black54),
                           ),
@@ -2277,10 +2295,11 @@ class _SummaryCard extends StatelessWidget {
                       height: 1,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 3),
                   Text(
                     title,
                     overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
