@@ -32,6 +32,8 @@ class _DriverAssignedWaybillsScreenState
   int _currentPage = 0;
   bool _hasNextPage = false;
   bool _usingServerPagination = false;
+  static const String _rejectedFilter = 'Rejected';
+
   String selectedStatusFilter = 'All';
   bool isLoading = true;
   String? sharingWaybillNumber;
@@ -40,16 +42,15 @@ class _DriverAssignedWaybillsScreenState
     final searchText = searchController.text.trim().toLowerCase();
 
     return assignedWaybills.where((waybill) {
-      final matchesStatus =
-          selectedStatusFilter == 'All' ||
-          waybill.status == selectedStatusFilter;
+      final matchesStatus = _matchesSelectedFilter(waybill);
       final matchesSearch =
           searchText.isEmpty ||
           waybill.waybillNumber.toLowerCase().contains(searchText) ||
           waybill.bajNumber.toLowerCase().contains(searchText) ||
           waybill.shippingVendor.toLowerCase().contains(searchText) ||
           waybill.consigneeReceiver.toLowerCase().contains(searchText) ||
-          waybill.status.toLowerCase().contains(searchText);
+          _displayStatus(waybill).toLowerCase().contains(searchText) ||
+          waybill.invoiceStatus.toLowerCase().contains(searchText);
 
       return matchesStatus && matchesSearch;
     }).toList();
@@ -78,7 +79,9 @@ class _DriverAssignedWaybillsScreenState
   }
 
   String? get _serverStatusFilter =>
-      selectedStatusFilter == 'All' ? null : selectedStatusFilter;
+      selectedStatusFilter == 'All' || selectedStatusFilter == _rejectedFilter
+      ? null
+      : selectedStatusFilter;
 
   void _resetPagination() {
     _currentPage = 0;
@@ -178,9 +181,17 @@ class _DriverAssignedWaybillsScreenState
                 driverId,
               );
 
-          if (_serverStatusFilter != null) {
+          if (selectedStatusFilter == _rejectedFilter) {
             assignedFromFirestore = assignedFromFirestore
-                .where((waybill) => waybill.status == _serverStatusFilter)
+                .where(_isRejected)
+                .toList();
+          } else if (_serverStatusFilter != null) {
+            assignedFromFirestore = assignedFromFirestore
+                .where(
+                  (waybill) =>
+                      !_isRejected(waybill) &&
+                      waybill.status == _serverStatusFilter,
+                )
                 .toList();
           }
 
@@ -261,6 +272,28 @@ class _DriverAssignedWaybillsScreenState
     await loadAssignedWaybills();
   }
 
+  Future<void> viewWaybill(WaybillModel waybill) async {
+    final index = await WaybillService.ensureCachedIndex(waybill);
+
+    if (!mounted) return;
+
+    if (index == -1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not find this waybill record')),
+      );
+      return;
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WaybillDetailsScreen(waybill: waybill, index: index),
+      ),
+    );
+
+    await loadAssignedWaybills();
+  }
+
   Future<void> shareWaybillPdf(WaybillModel waybill) async {
     if (sharingWaybillNumber != null) return;
 
@@ -297,6 +330,21 @@ class _DriverAssignedWaybillsScreenState
     return 'Waybill_$safeWaybillNumber.pdf';
   }
 
+  bool _isRejected(WaybillModel waybill) {
+    return waybill.invoiceStatus == WaybillService.invoiceRejectedStatus;
+  }
+
+  String _displayStatus(WaybillModel waybill) {
+    if (_isRejected(waybill)) return _rejectedFilter;
+    return waybill.status;
+  }
+
+  bool _matchesSelectedFilter(WaybillModel waybill) {
+    if (selectedStatusFilter == 'All') return true;
+    if (selectedStatusFilter == _rejectedFilter) return _isRejected(waybill);
+    return !_isRejected(waybill) && waybill.status == selectedStatusFilter;
+  }
+
   Color getStatusColor(String status) {
     switch (status) {
       case WaybillService.pendingDeliveryStatus:
@@ -307,6 +355,8 @@ class _DriverAssignedWaybillsScreenState
         return Colors.blue;
       case WaybillService.invoicedStatus:
         return Colors.green;
+      case _rejectedFilter:
+        return Colors.red;
       default:
         return Colors.grey;
     }
@@ -314,7 +364,7 @@ class _DriverAssignedWaybillsScreenState
 
   @override
   Widget build(BuildContext context) {
-    final isWideScreen = MediaQuery.of(context).size.width > 800;
+    final isWideScreen = MediaQuery.of(context).size.width >= 600;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
@@ -336,37 +386,40 @@ class _DriverAssignedWaybillsScreenState
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildHeader(),
-            const SizedBox(height: 14),
-            _buildSearchAndFilterRow(),
-            const SizedBox(height: 14),
-            Expanded(
-              child: isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : assignedWaybills.isEmpty
-                  ? _buildEmptyState()
-                  : filteredWaybills.isEmpty
-                  ? _buildNoMatchesState()
-                  : Column(
-                      children: [
-                        Expanded(
-                          child: isWideScreen
-                              ? _buildTableView()
-                              : _buildCardList(),
-                        ),
-                        if (_usingServerPagination) ...[
-                          const SizedBox(height: 12),
-                          _buildPaginationControls(),
+      body: SafeArea(
+        bottom: true,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildHeader(),
+              const SizedBox(height: 14),
+              _buildSearchAndFilterRow(),
+              const SizedBox(height: 14),
+              Expanded(
+                child: isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : assignedWaybills.isEmpty
+                    ? _buildEmptyState()
+                    : filteredWaybills.isEmpty
+                    ? _buildNoMatchesState()
+                    : Column(
+                        children: [
+                          Expanded(
+                            child: isWideScreen
+                                ? _buildTableView()
+                                : _buildCardList(),
+                          ),
+                          if (_usingServerPagination) ...[
+                            const SizedBox(height: 8),
+                            _buildPaginationControls(),
+                          ],
                         ],
-                      ],
-                    ),
-            ),
-          ],
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -379,6 +432,7 @@ class _DriverAssignedWaybillsScreenState
         assignedWaybills
             .where(
               (waybill) =>
+                  !_isRejected(waybill) &&
                   waybill.status == WaybillService.pendingDeliveryStatus,
             )
             .length;
@@ -396,15 +450,15 @@ class _DriverAssignedWaybillsScreenState
       child: Row(
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
               color: Colors.blue.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
             child: const Icon(Icons.local_shipping, color: Colors.blue),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -422,7 +476,7 @@ class _DriverAssignedWaybillsScreenState
             ),
           ),
           Chip(
-            avatar: const Icon(Icons.assignment, size: 18),
+            avatar: const Icon(Icons.assignment, size: 16),
             label: Text('$totalCount Total'),
           ),
         ],
@@ -456,15 +510,15 @@ class _DriverAssignedWaybillsScreenState
               vertical: 14,
             ),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: Color(0xFFD8E1EC)),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: Color(0xFFD8E1EC)),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: Colors.blue, width: 1.4),
             ),
           ),
@@ -474,8 +528,8 @@ class _DriverAssignedWaybillsScreenState
           return Row(
             children: [
               Expanded(child: searchField),
-              const SizedBox(width: 12),
-              SizedBox(width: 360, child: _buildSummaryFilterPill()),
+              const SizedBox(width: 10),
+              SizedBox(width: 520, child: _buildSummaryFilterPill()),
             ],
           );
         }
@@ -496,6 +550,7 @@ class _DriverAssignedWaybillsScreenState
     final pendingCount = _countByStatus(WaybillService.pendingDeliveryStatus);
     final deliveredCount = _countByStatus(WaybillService.deliveredStatus);
     final invoicedCount = _countByStatus(WaybillService.invoicedStatus);
+    final rejectedCount = _countByStatus(_rejectedFilter);
     final showingCount = selectedStatusFilter == 'All'
         ? assignedStats?.total ?? filteredWaybills.length
         : _countByStatus(selectedStatusFilter);
@@ -517,6 +572,7 @@ class _DriverAssignedWaybillsScreenState
         ),
         _buildFilterMenuItem(WaybillService.deliveredStatus, deliveredCount),
         _buildFilterMenuItem(WaybillService.invoicedStatus, invoicedCount),
+        _buildFilterMenuItem(_rejectedFilter, rejectedCount),
       ],
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -528,14 +584,16 @@ class _DriverAssignedWaybillsScreenState
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.filter_list, color: Colors.blue, size: 18),
+            const Icon(Icons.filter_list, color: Colors.blue, size: 16),
             const SizedBox(width: 8),
             Flexible(
               child: Text(
                 selectedStatusFilter == 'All'
-                    ? 'Pending $pendingCount | Delivered $deliveredCount | Invoiced $invoicedCount'
+                    ? 'Pending $pendingCount | Delivered $deliveredCount | Invoiced $invoicedCount | Rejected $rejectedCount'
                     : '$showingCount $selectedStatusFilter',
-                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+                softWrap: true,
+                overflow: TextOverflow.visible,
                 style: const TextStyle(
                   color: Colors.blue,
                   fontWeight: FontWeight.w700,
@@ -560,7 +618,7 @@ class _DriverAssignedWaybillsScreenState
                 ? Icons.radio_button_checked
                 : Icons.radio_button_off,
             color: status == 'All' ? Colors.blue : getStatusColor(status),
-            size: 18,
+            size: 16,
           ),
           const SizedBox(width: 10),
           Expanded(child: Text(status)),
@@ -583,10 +641,18 @@ class _DriverAssignedWaybillsScreenState
           return stats.delivered;
         case WaybillService.invoicedStatus:
           return stats.invoiced;
+        case _rejectedFilter:
+          return stats.rejected;
       }
     }
 
-    return assignedWaybills.where((waybill) => waybill.status == status).length;
+    if (status == _rejectedFilter) {
+      return assignedWaybills.where(_isRejected).length;
+    }
+
+    return assignedWaybills
+        .where((waybill) => !_isRejected(waybill) && waybill.status == status)
+        .length;
   }
 
   Widget _buildPaginationControls() {
@@ -647,7 +713,7 @@ class _DriverAssignedWaybillsScreenState
               SizedBox(height: 12),
               Text(
                 'No assigned waybills yet',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
               ),
               SizedBox(height: 6),
               Text(
@@ -671,10 +737,10 @@ class _DriverAssignedWaybillsScreenState
             mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(Icons.search_off, size: 54, color: Colors.grey),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               const Text(
                 'No matching waybills',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 6),
               Text(
@@ -698,34 +764,145 @@ class _DriverAssignedWaybillsScreenState
         itemCount: filteredWaybills.length,
         itemBuilder: (context, index) {
           final waybill = filteredWaybills[index];
+          final displayStatus = _displayStatus(waybill);
+          final statusColor = getStatusColor(displayStatus);
+          final isPendingDelivery =
+              waybill.status == WaybillService.pendingDeliveryStatus;
+          final isSharing = sharingWaybillNumber == waybill.waybillNumber;
 
           return Card(
-            child: ListTile(
-              leading: const Icon(Icons.receipt_long, color: Colors.blue),
-              title: Text(
-                waybill.waybillNumber,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(
-                'BAJ No: ${waybill.bajNumber}\n'
-                'Date: ${waybill.date}\n'
-                'Client: ${waybill.shippingVendor} | ${waybill.status}',
-              ),
-              trailing: IconButton(
-                tooltip: 'Share PDF',
-                onPressed: sharingWaybillNumber == null
-                    ? () => shareWaybillPdf(waybill)
-                    : null,
-                icon: sharingWaybillNumber == waybill.waybillNumber
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.share, size: 20),
-              ),
-              isThreeLine: true,
+            margin: const EdgeInsets.only(bottom: 8),
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+              side: const BorderSide(color: Color(0xFFDDE6F2)),
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
               onTap: () => openWaybill(waybill),
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.receipt_long,
+                            color: Colors.blue,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Wrap(
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 6,
+                                runSpacing: 4,
+                                children: [
+                                  Text(
+                                    waybill.waybillNumber,
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF172033),
+                                    ),
+                                  ),
+                                  _buildCardStatusChip(
+                                    displayStatus,
+                                    statusColor,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 5),
+                              Wrap(
+                                spacing: 12,
+                                runSpacing: 5,
+                                children: [
+                                  _buildCardInfoText(
+                                    'BAJ No',
+                                    waybill.bajNumber,
+                                  ),
+                                  _buildCardInfoText(
+                                    'Client',
+                                    waybill.shippingVendor,
+                                  ),
+                                  _buildCardIconText(
+                                    Icons.calendar_today,
+                                    waybill.date,
+                                  ),
+                                  _buildCardIconText(
+                                    Icons.local_shipping,
+                                    displayStatus,
+                                    color: statusColor,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 8,
+                      runSpacing: 5,
+                      children: [
+                        FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                          ),
+                          onPressed: () => openWaybill(waybill),
+                          icon: Icon(
+                            isPendingDelivery
+                                ? Icons.task_alt
+                                : Icons.visibility,
+                            size: 16,
+                          ),
+                          label: Text(isPendingDelivery ? 'Deliver' : 'View'),
+                        ),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                          ),
+                          onPressed: sharingWaybillNumber == null
+                              ? () => shareWaybillPdf(waybill)
+                              : null,
+                          icon: isSharing
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.share, size: 16),
+                          label: const Text('Share'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
           );
         },
@@ -733,76 +910,159 @@ class _DriverAssignedWaybillsScreenState
     );
   }
 
+  Widget _buildCardStatusChip(String status, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.13),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(
+          color: color,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.4,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardInfoText(String label, String value) {
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(color: Color(0xFF34465C), fontSize: 13),
+        children: [
+          TextSpan(text: '$label: '),
+          TextSpan(
+            text: value.isEmpty ? '-' : value,
+            style: const TextStyle(
+              color: Color(0xFF172033),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCardIconText(IconData icon, String text, {Color? color}) {
+    final effectiveColor = color ?? const Color(0xFF34465C);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: effectiveColor),
+        const SizedBox(width: 4),
+        Text(
+          text.isEmpty ? '-' : text,
+          style: TextStyle(
+            color: effectiveColor,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildTableView() {
     return Card(
       clipBehavior: Clip.antiAlias,
-      child: SingleChildScrollView(
-        child: DataTable(
-          headingRowColor: WidgetStateProperty.all(
-            Colors.blue.withValues(alpha: 0.08),
-          ),
-          columns: const [
-            DataColumn(label: Text('Waybill No.')),
-            DataColumn(label: Text('BAJ No.')),
-            DataColumn(label: Text('Date')),
-            DataColumn(label: Text('Shipping/Vendor')),
-            DataColumn(label: Text('Status')),
-            DataColumn(label: Text('Action')),
-          ],
-          rows: filteredWaybills.map((waybill) {
-            final statusColor = getStatusColor(waybill.status);
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: SingleChildScrollView(
+                child: DataTable(
+                  headingRowColor: WidgetStateProperty.all(
+                    Colors.blue.withValues(alpha: 0.08),
+                  ),
+                  columns: const [
+                    DataColumn(label: Text('Waybill No.')),
+                    DataColumn(label: Text('BAJ No.')),
+                    DataColumn(label: Text('Date')),
+                    DataColumn(label: Text('Shipping/Vendor')),
+                    DataColumn(label: Text('Status')),
+                    DataColumn(label: Text('Action')),
+                  ],
+                  rows: filteredWaybills.map((waybill) {
+                    final displayStatus = _displayStatus(waybill);
+                    final statusColor = getStatusColor(displayStatus);
 
-            return DataRow(
-              cells: [
-                DataCell(Text(waybill.waybillNumber)),
-                DataCell(Text(waybill.bajNumber)),
-                DataCell(Text(waybill.date)),
-                DataCell(Text(waybill.shippingVendor)),
-                DataCell(
-                  Chip(
-                    label: Text(waybill.status),
-                    backgroundColor: statusColor.withValues(alpha: 0.14),
-                    labelStyle: TextStyle(
-                      color: statusColor,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                DataCell(
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextButton.icon(
-                        onPressed: () => openWaybill(waybill),
-                        icon: const Icon(Icons.open_in_new, size: 18),
-                        label: Text(
-                          waybill.status == WaybillService.pendingDeliveryStatus
-                              ? 'Deliver'
-                              : 'View',
+                    return DataRow(
+                      cells: [
+                        DataCell(
+                          Text(
+                            waybill.waybillNumber,
+                            style: const TextStyle(
+                              color: Colors.blue,
+                              fontWeight: FontWeight.w800,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                          onTap: () => viewWaybill(waybill),
                         ),
-                      ),
-                      TextButton.icon(
-                        onPressed: sharingWaybillNumber == null
-                            ? () => shareWaybillPdf(waybill)
-                            : null,
-                        icon: sharingWaybillNumber == waybill.waybillNumber
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                        DataCell(Text(waybill.bajNumber)),
+                        DataCell(Text(waybill.date)),
+                        DataCell(Text(waybill.shippingVendor)),
+                        DataCell(
+                          Chip(
+                            label: Text(displayStatus),
+                            backgroundColor: statusColor.withValues(
+                              alpha: 0.14,
+                            ),
+                            labelStyle: TextStyle(
+                              color: statusColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TextButton.icon(
+                                onPressed: () => openWaybill(waybill),
+                                icon: const Icon(Icons.open_in_new, size: 16),
+                                label: Text(
+                                  waybill.status ==
+                                          WaybillService.pendingDeliveryStatus
+                                      ? 'Deliver'
+                                      : 'View',
                                 ),
-                              )
-                            : const Icon(Icons.share, size: 18),
-                        label: const Text('Share'),
-                      ),
-                    ],
-                  ),
+                              ),
+                              TextButton.icon(
+                                onPressed: sharingWaybillNumber == null
+                                    ? () => shareWaybillPdf(waybill)
+                                    : null,
+                                icon:
+                                    sharingWaybillNumber ==
+                                        waybill.waybillNumber
+                                    ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.share, size: 16),
+                                label: const Text('Share'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
                 ),
-              ],
-            );
-          }).toList(),
-        ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

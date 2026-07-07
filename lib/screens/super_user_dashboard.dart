@@ -1395,10 +1395,10 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
   Widget _summaryCardWrap(List<Widget> cards) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 1180
+        final columns = constraints.maxWidth >= 900
             ? 6
-            : (constraints.maxWidth >= 760 ? 3 : 1);
-        const spacing = 12.0;
+            : (constraints.maxWidth >= 640 ? 3 : 1);
+        const spacing = 10.0;
         final itemWidth =
             (constraints.maxWidth - (spacing * (columns - 1))) / columns;
 
@@ -1427,8 +1427,8 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Container(
-          height: 108,
-          padding: const EdgeInsets.all(16),
+          height: 92,
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: color.withValues(alpha: 0.28)),
@@ -1443,15 +1443,15 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
           child: Row(
             children: [
               Container(
-                width: 48,
-                height: 48,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.13),
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: BorderRadius.circular(13),
                 ),
-                child: Icon(icon, color: color, size: 25),
+                child: Icon(icon, color: color, size: 21),
               ),
-              const SizedBox(width: 13),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1461,25 +1461,26 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                       value,
                       style: TextStyle(
                         color: color,
-                        fontSize: 23,
+                        fontSize: 20,
                         fontWeight: FontWeight.w900,
                         height: 1,
                       ),
                     ),
-                    const SizedBox(height: 7),
+                    const SizedBox(height: 5),
                     Text(
                       title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _onSurface,
+                        fontSize: 12,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: color),
+              Icon(Icons.chevron_right, color: color, size: 20),
             ],
           ),
         ),
@@ -1570,7 +1571,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                         letterSpacing: -0.2,
                       ),
                     ),
-                    const SizedBox(height: 7),
+                    const SizedBox(height: 5),
                     Wrap(
                       spacing: 8,
                       runSpacing: 6,
@@ -2269,6 +2270,16 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     }
   }
 
+  String _displayWaybillStatus(WaybillModel waybill) {
+    if (waybill.isDeleted) return 'Deleted';
+    if (waybill.invoiceStatus != WaybillService.invoiceNotSentStatus) {
+      return waybill.invoiceStatus == WaybillService.invoiceAcceptedStatus
+          ? WaybillService.invoicedStatus
+          : waybill.invoiceStatus;
+    }
+    return waybill.status;
+  }
+
   Widget _buildWaybillCards(List<WaybillModel> sourceWaybills) {
     return Column(
       children: [
@@ -2284,7 +2295,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
               subtitle: Text(
                 'BAJ: ${waybill.bajNumber}\n'
                 'Client: ${waybill.shippingVendor}\n'
-                'Status: ${waybill.status}',
+                'Status: ${_displayWaybillStatus(waybill)}',
               ),
               isThreeLine: true,
               onTap: waybill.isDeleted ? null : () => _openWaybill(waybill),
@@ -2382,9 +2393,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                       ),
                       DataCell(
                         _SuperUserStatusChip(
-                          status: waybill.isDeleted
-                              ? 'Deleted'
-                              : waybill.status,
+                          status: _displayWaybillStatus(waybill),
                         ),
                       ),
                       DataCell(
@@ -2596,8 +2605,11 @@ class _SuperUserStatusChip extends StatelessWidget {
         return Colors.deepOrange;
       case 'Delivered':
         return Colors.blue;
+      case 'Sent for Invoicing':
+        return Colors.indigo;
       case 'Invoiced':
         return Colors.green;
+      case 'Rejected':
       case 'Deleted':
         return Colors.red;
       default:

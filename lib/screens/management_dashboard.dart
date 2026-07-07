@@ -175,7 +175,7 @@ class _ManagementDashboardState extends State<ManagementDashboard> {
     final isWideScreen = screenWidth > 900;
     final isTablet = screenWidth >= 600 && !isWideScreen;
     final summaryColumns = isWideScreen ? 6 : (isTablet ? 2 : 1);
-    final summaryAspectRatio = isWideScreen ? 2.35 : (isTablet ? 2.65 : 4.1);
+    final summaryAspectRatio = isWideScreen ? 1.85 : (isTablet ? 2.35 : 3.6);
 
     final dashboardContent = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1431,7 +1431,7 @@ class _MetricCard extends StatelessWidget {
         onTap: isLoading ? null : onTap,
         borderRadius: BorderRadius.circular(18),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: color.withValues(alpha: 0.22)),
@@ -1439,15 +1439,15 @@ class _MetricCard extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(13),
                 ),
-                child: Icon(icon, color: color),
+                child: Icon(icon, color: color, size: 20),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1457,7 +1457,7 @@ class _MetricCard extends StatelessWidget {
                       value.toString(),
                       style: TextStyle(
                         color: color,
-                        fontSize: 21,
+                        fontSize: 19,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -1467,7 +1467,7 @@ class _MetricCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 12.5,
+                        fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: Color(0xFF172033),
                       ),

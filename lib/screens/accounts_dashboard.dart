@@ -1353,23 +1353,27 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
         filteredWaybills
             .where((waybill) => waybill.status == WaybillService.invoicedStatus)
             .length;
-    final displayInvoicedCount =
-        _serverTotalWaybills ??
-        (widget.showFullSummary
-            ? invoicedCount
-            : widget.invoicedCount ?? invoicedCount);
+    final rejectedCount =
+        stats?.rejected ??
+        filteredWaybills
+            .where(
+              (waybill) =>
+                  waybill.invoiceStatus == WaybillService.invoiceRejectedStatus,
+            )
+            .length;
+    final displayInvoicedCount = widget.showFullSummary
+        ? invoicedCount
+        : widget.invoicedCount ?? invoicedCount;
     final secondarySummaryLabel = widget.invoiceActionMode == 'sentReview'
         ? 'Sent'
         : widget.showMarkInvoicedButton
         ? 'Ready'
         : 'Invoiced';
-    final secondarySummaryValue =
-        _serverTotalWaybills ??
-        (widget.invoiceActionMode == 'sentReview'
-            ? stats?.sentForInvoicing ?? filteredWaybills.length
-            : widget.showMarkInvoicedButton
-            ? readyCount
-            : displayInvoicedCount);
+    final secondarySummaryValue = widget.invoiceActionMode == 'sentReview'
+        ? stats?.sentForInvoicing ?? filteredWaybills.length
+        : widget.showMarkInvoicedButton
+        ? readyCount
+        : displayInvoicedCount;
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
       body: Padding(
@@ -1475,6 +1479,12 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
                               value: displayInvoicedCount.toString(),
                               color: Colors.blue,
                               icon: Icons.receipt_long,
+                            ),
+                            _AccountsSummaryPill(
+                              label: 'Rejected',
+                              value: rejectedCount.toString(),
+                              color: Colors.red,
+                              icon: Icons.warning_amber_rounded,
                             ),
                           ]
                         : [
