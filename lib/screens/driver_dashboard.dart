@@ -290,22 +290,25 @@ class _DriverDashboardState extends State<DriverDashboard> {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildSummaryCards(isWideScreen: isWideScreen),
-            const SizedBox(height: 12),
-            if (pendingSyncWaybills.isNotEmpty) _buildPendingSyncBanner(),
-            Expanded(
-              child: visibleWaybills.isEmpty
-                  ? _buildEmptyTableMessage()
-                  : isWideScreen
-                  ? _buildTableView()
-                  : _buildListView(),
-            ),
-          ],
+      body: SafeArea(
+        bottom: true,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildSummaryCards(isWideScreen: isWideScreen),
+              const SizedBox(height: 12),
+              if (pendingSyncWaybills.isNotEmpty) _buildPendingSyncBanner(),
+              Expanded(
+                child: visibleWaybills.isEmpty
+                    ? _buildEmptyTableMessage()
+                    : isWideScreen
+                    ? _buildTableView()
+                    : _buildListView(),
+              ),
+            ],
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton.small(
