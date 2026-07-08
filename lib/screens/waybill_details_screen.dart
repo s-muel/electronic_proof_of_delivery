@@ -304,6 +304,11 @@ class _WaybillHeaderCard extends StatelessWidget {
     }
   }
 
+  String get _createdByName {
+    final createdByName = waybill.createdByName.trim();
+    return createdByName.isEmpty ? 'Unknown officer' : createdByName;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -367,6 +372,11 @@ class _WaybillHeaderCard extends StatelessWidget {
             icon: Icons.business,
             label: 'Vendor',
             value: waybill.shippingVendor,
+          ),
+          _HeaderInfo(
+            icon: Icons.person_outline,
+            label: 'Created By',
+            value: _createdByName,
           ),
           Chip(
             avatar: Icon(Icons.circle, size: 12, color: _statusColor),
