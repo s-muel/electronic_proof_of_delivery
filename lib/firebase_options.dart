@@ -41,47 +41,46 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAg_3Q3M6pJ7c_yC3DmxP_vT_25f18WAxo',
-    appId: '1:100659409017:web:50f412df6d8e671d7ce4a8',
-    messagingSenderId: '100659409017',
-    projectId: 'baj-epod',
-    authDomain: 'baj-epod.firebaseapp.com',
-    storageBucket: 'baj-epod.firebasestorage.app',
+    apiKey: 'AIzaSyC9vAczW5HWcQTNc0TUd7neLa-4bB_GS4g',
+    appId: '1:81968705855:web:85620d07bb81fc6939a38a',
+    messagingSenderId: '81968705855',
+    projectId: 'bajfreight-system',
+    authDomain: 'bajfreight-system.firebaseapp.com',
+    storageBucket: 'bajfreight-system.firebasestorage.app',
+    measurementId: 'G-30G4TX4ZQD',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyAUmMGwuGsQuG2R4dWTJddSekVP3c5iWU0',
-    appId: '1:100659409017:android:92df72e0495cec917ce4a8',
-    messagingSenderId: '100659409017',
-    projectId: 'baj-epod',
-    storageBucket: 'baj-epod.firebasestorage.app',
+    apiKey: 'AIzaSyAduDoBbwrQz9Fz1Y18n5cg11yvF9VcceQ',
+    appId: '1:81968705855:android:2569bfa50f1ca4fd39a38a',
+    messagingSenderId: '81968705855',
+    projectId: 'bajfreight-system',
+    storageBucket: 'bajfreight-system.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyCJ77a8blG2JOXGadMp2_eFDsI15eEP2kQ',
-    appId: '1:504831005939:ios:d67f823c4a1196493f5386',
-    messagingSenderId: '504831005939',
-    projectId: 'familyapp-8ec6f',
-    storageBucket: 'familyapp-8ec6f.appspot.com',
+    apiKey: 'AIzaSyADG9VvV9JNenyRWXzvWey_ij-p7ESeJeM',
+    appId: '1:81968705855:ios:a88ce2b897f6798c39a38a',
+    messagingSenderId: '81968705855',
+    projectId: 'bajfreight-system',
+    storageBucket: 'bajfreight-system.firebasestorage.app',
     iosBundleId: 'com.example.ePod',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyCJ77a8blG2JOXGadMp2_eFDsI15eEP2kQ',
-    appId: '1:504831005939:ios:d67f823c4a1196493f5386',
-    messagingSenderId: '504831005939',
-    projectId: 'familyapp-8ec6f',
-    storageBucket: 'familyapp-8ec6f.appspot.com',
+    apiKey: 'AIzaSyADG9VvV9JNenyRWXzvWey_ij-p7ESeJeM',
+    appId: '1:81968705855:ios:a88ce2b897f6798c39a38a',
+    messagingSenderId: '81968705855',
+    projectId: 'bajfreight-system',
+    storageBucket: 'bajfreight-system.firebasestorage.app',
     iosBundleId: 'com.example.ePod',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyAg_3Q3M6pJ7c_yC3DmxP_vT_25f18WAxo',
-    appId: '1:100659409017:web:2415ff5ab73f6ab27ce4a8',
-    messagingSenderId: '100659409017',
-    projectId: 'baj-epod',
-    authDomain: 'baj-epod.firebaseapp.com',
-    storageBucket: 'baj-epod.firebasestorage.app',
+    apiKey: 'AIzaSyC9vAczW5HWcQTNc0TUd7neLa-4bB_GS4g',
+    appId: '1:81968705855:web:657eaeb19980ae7c39a38a',
+    messagingSenderId: '81968705855',
+    projectId: 'bajfreight-system',
+    authDomain: 'bajfreight-system.firebaseapp.com',
+    storageBucket: 'bajfreight-system.firebasestorage.app',
+    measurementId: 'G-1KS93M0RBT',
   );
-
 }
