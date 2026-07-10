@@ -195,8 +195,10 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
         roleFilter: selectedUserRoleFilter,
       );
 
-      if (page.hasMore && _userPageCursors.length == pageIndex + 1) {
-        _userPageCursors.add(page.lastDocument);
+      if (_userPageCursors.length <= pageIndex + 1) {
+        _userPageCursors.add(page.hasMore ? page.lastDocument : null);
+      } else if (page.hasMore) {
+        _userPageCursors[pageIndex + 1] = page.lastDocument;
       }
 
       if (!mounted) return;
@@ -1732,6 +1734,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
   Widget _buildUsersTab(int activeUsers) {
     final filteredUsers = _filteredUsers();
     final usersByRole = _groupUsersByRole(filteredUsers);
+    final totalFilteredUsers = _totalUsersForRole(selectedUserRoleFilter);
     final shouldPaginate = _usingServerUserPagination
         ? (_userCurrentPage > 0 || _userHasNextPage)
         : filteredUsers.length > _userItemsPerPage;
@@ -1790,11 +1793,12 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
               _buildRoleUserSection(
                 roleLabel: entry.key,
                 roleUsers: entry.value,
+                totalRoleUsers: roleFilter == null ? null : totalFilteredUsers,
               ),
             if (shouldPaginate) ...[
               const SizedBox(height: 12),
               _buildUserPaginationControls(
-                totalItems: userStats?.total ?? filteredUsers.length,
+                totalItems: totalFilteredUsers,
                 visibleCount: visibleCount,
                 totalPages: 0,
               ),
@@ -1828,7 +1832,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
           Expanded(
             child: Text(
               _usingServerUserPagination
-                  ? 'Showing $visibleCount users on page ${_userCurrentPage + 1}'
+                  ? 'Showing $start-$end of $totalItems users'
                   : 'Showing $start-$end of $totalItems users',
               style: const TextStyle(
                 color: _onSurfaceVariant,
@@ -1927,6 +1931,30 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     }).toList();
   }
 
+  int _totalUsersForRole(String? roleFilter) {
+    final stats = userStats;
+    if (stats == null || roleFilter == null) {
+      return stats?.total ?? users.length;
+    }
+
+    switch (roleFilter) {
+      case 'Super User':
+        return stats.superUsers;
+      case 'Officer':
+        return stats.officers;
+      case 'Driver':
+        return stats.drivers;
+      case 'Accounts':
+        return stats.accounts;
+      case 'Management':
+        return stats.management;
+      case 'Manager':
+        return stats.managers;
+      default:
+        return users.length;
+    }
+  }
+
   Map<String, List<AppUserModel>> _groupUsersByRole(
     List<AppUserModel> sourceUsers,
   ) {
@@ -1966,55 +1994,280 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
   Widget _buildRoleUserSection({
     required String roleLabel,
     required List<AppUserModel> roleUsers,
+    int? totalRoleUsers,
   }) {
     final activeCount = roleUsers.where((user) => user.isActive).length;
+    final subtitle = totalRoleUsers == null
+        ? '$activeCount active of ${roleUsers.length} users'
+        : 'Showing ${roleUsers.length} of $totalRoleUsers users';
 
     return Card(
-      child: ExpansionTile(
-        initiallyExpanded: false,
-        leading: CircleAvatar(child: Icon(_roleIcon(roleLabel))),
-        title: Text(
-          roleLabel,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+      margin: const EdgeInsets.only(bottom: 12),
+      clipBehavior: Clip.antiAlias,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: _outline.withValues(alpha: 0.45)),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: true,
+          tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          childrenPadding: EdgeInsets.zero,
+          backgroundColor: Colors.white,
+          collapsedBackgroundColor: const Color(0xFFF7FAFD),
+          iconColor: Colors.blue,
+          collapsedIconColor: Colors.blue,
+          leading: Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8F3FF),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Icon(_roleIcon(roleLabel), color: Colors.blue, size: 18),
+          ),
+          title: Text(
+            roleLabel,
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              color: _onSurface,
+            ),
+          ),
+          subtitle: Text(
+            subtitle,
+            style: const TextStyle(fontSize: 11, color: _onSurfaceVariant),
+          ),
+          children: [
+            for (var index = 0; index < roleUsers.length; index++)
+              _buildUserRow(
+                roleUsers[index],
+                showDivider: index < roleUsers.length - 1,
+              ),
+          ],
         ),
-        subtitle: Text('$activeCount active of ${roleUsers.length} users'),
-        children: [for (final user in roleUsers) _buildUserTile(user)],
       ),
     );
   }
 
-  Widget _buildUserTile(AppUserModel user) {
-    final detailLines = <String>[
-      user.email,
-      "Status: ${user.isActive ? 'Active' : 'Inactive'}",
-      if (user.department.trim().isNotEmpty)
-        "Department: ${user.department.trim()}",
-      if (user.tempPass.trim().isNotEmpty) "Temp Pass: ${user.tempPass.trim()}",
-    ];
+  Widget _buildUserRow(AppUserModel user, {required bool showDivider}) {
+    final displayName = user.fullName.trim().isEmpty
+        ? user.email.trim()
+        : user.fullName.trim();
 
-    return ListTile(
-      leading: CircleAvatar(
-        child: Icon(user.isActive ? Icons.person : Icons.person_off),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: showDivider
+            ? Border(bottom: BorderSide(color: _outline.withValues(alpha: 0.3)))
+            : null,
       ),
-      title: Text(user.fullName.isEmpty ? user.email : user.fullName),
-      subtitle: Text(detailLines.join('\n')),
-      isThreeLine: detailLines.length > 2,
-      trailing: Wrap(
-        spacing: 4,
-        children: [
-          IconButton(
-            onPressed: () => _sendPasswordReset(user),
-            icon: const Icon(Icons.lock_reset),
-            tooltip: 'Send Password Reset',
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCompact = constraints.maxWidth < 720;
+
+          if (isCompact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _userInitialAvatar(user),
+                    const SizedBox(width: 12),
+                    Expanded(child: _userIdentity(displayName, user.email)),
+                    _userActions(user),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 22,
+                  runSpacing: 10,
+                  children: [
+                    _userMetaBlock(
+                      label: 'Status',
+                      value: user.isActive ? 'Active' : 'Inactive',
+                      valueColor: user.isActive
+                          ? const Color(0xFF008A4C)
+                          : const Color(0xFFB42318),
+                    ),
+                    _userMetaBlock(
+                      label: 'Department',
+                      value: user.department.trim().isEmpty
+                          ? '-'
+                          : user.department.trim(),
+                    ),
+                    _userMetaBlock(
+                      label: 'Temp Pass',
+                      value: user.tempPass.trim().isEmpty
+                          ? '-'
+                          : user.tempPass.trim(),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              _userInitialAvatar(user),
+              const SizedBox(width: 12),
+              Expanded(flex: 3, child: _userIdentity(displayName, user.email)),
+              Expanded(
+                flex: 2,
+                child: _userMetaBlock(
+                  label: 'Status',
+                  value: user.isActive ? 'Active' : 'Inactive',
+                  valueColor: user.isActive
+                      ? const Color(0xFF008A4C)
+                      : const Color(0xFFB42318),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: _userMetaBlock(
+                  label: 'Department',
+                  value: user.department.trim().isEmpty
+                      ? '-'
+                      : user.department.trim(),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: _userMetaBlock(
+                  label: 'Temp Pass',
+                  value: user.tempPass.trim().isEmpty
+                      ? '-'
+                      : user.tempPass.trim(),
+                ),
+              ),
+              _userActions(user),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _userInitialAvatar(AppUserModel user) {
+    return CircleAvatar(
+      radius: 18,
+      backgroundColor: _avatarColor(user),
+      child: Text(
+        _userInitials(user),
+        style: const TextStyle(
+          color: Color(0xFF4F46E5),
+          fontWeight: FontWeight.w800,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+
+  Widget _userIdentity(String displayName, String email) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          displayName,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: _onSurface,
+            fontWeight: FontWeight.w800,
+            fontSize: 14,
           ),
-          IconButton(
-            onPressed: () => _toggleUserActive(user),
-            icon: Icon(user.isActive ? Icons.block : Icons.check_circle),
-            tooltip: user.isActive ? 'Deactivate' : 'Reactivate',
+        ),
+        const SizedBox(height: 3),
+        Text(
+          email,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: _onSurfaceVariant, fontSize: 12),
+        ),
+      ],
+    );
+  }
+
+  Widget _userMetaBlock({
+    required String label,
+    required String value,
+    Color? valueColor,
+  }) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 120),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              color: Color(0xFF8A94B8),
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: valueColor ?? _onSurface,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _userActions(AppUserModel user) {
+    return Wrap(
+      spacing: 8,
+      children: [
+        IconButton(
+          onPressed: () => _sendPasswordReset(user),
+          icon: const Icon(Icons.lock_reset),
+          color: const Color(0xFF8FA0BC),
+          tooltip: 'Send Password Reset',
+        ),
+        IconButton(
+          onPressed: () => _toggleUserActive(user),
+          icon: Icon(user.isActive ? Icons.block : Icons.check_circle),
+          color: const Color(0xFF8FA0BC),
+          tooltip: user.isActive ? 'Deactivate' : 'Reactivate',
+        ),
+      ],
+    );
+  }
+
+  String _userInitials(AppUserModel user) {
+    final source = user.fullName.trim().isEmpty
+        ? user.email.trim()
+        : user.fullName.trim();
+    final parts = source
+        .split(RegExp(r'\s+'))
+        .where((part) => part.trim().isNotEmpty)
+        .toList();
+
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+
+    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'
+        .toUpperCase();
+  }
+
+  Color _avatarColor(AppUserModel user) {
+    final colors = [
+      const Color(0xFFE2E7FF),
+      const Color(0xFFE8F3FF),
+      const Color(0xFFFFF1BF),
+      const Color(0xFFF1F5F9),
+    ];
+    final source = user.email.isEmpty ? user.fullName : user.email;
+    final index = source.codeUnits.fold<int>(0, (sum, code) => sum + code);
+    return colors[index % colors.length];
   }
 
   IconData _roleIcon(String roleLabel) {
