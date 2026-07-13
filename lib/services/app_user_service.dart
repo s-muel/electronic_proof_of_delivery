@@ -22,6 +22,7 @@ class AppUserService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static const String _collectionName = 'users';
   static const String _userStatsDocumentPath = 'appStats/usersSummary';
+  static const String _driverIndexDocumentPath = 'appStats/drivers';
   static const String _secondaryAppName = 'admin-user-create';
   static FirebaseApp? _secondaryApp;
 
@@ -30,6 +31,9 @@ class AppUserService {
 
   static DocumentReference<Map<String, dynamic>> get _userStatsDoc =>
       _firestore.doc(_userStatsDocumentPath);
+
+  static DocumentReference<Map<String, dynamic>> get _driverIndexDoc =>
+      _firestore.doc(_driverIndexDocumentPath);
 
   static Future<FirebaseAuth> _getSecondaryAuth() async {
     for (final app in Firebase.apps) {
@@ -123,6 +127,7 @@ class AppUserService {
     final stats = UserStatsModel.fromUsers(users);
 
     await _userStatsDoc.set(stats.toMap());
+    await _writeDriverIndexFromUsers(users);
     return stats;
   }
 
@@ -188,13 +193,38 @@ class AppUserService {
   }
 
   static Future<List<AppUserModel>> getActiveDrivers() async {
+    final snapshot = await _driverIndexDoc.get();
+    final data = snapshot.data();
+    final driversData = data?['drivers'];
+
+    if (!snapshot.exists || driversData is! List) {
+      throw StateError('Driver index has not been built.');
+    }
+
+    return driversData.whereType<Map>().map((driver) {
+      return AppUserModel.fromMap(Map<String, dynamic>.from(driver));
+    }).toList()..sort(_sortUsersByName);
+  }
+
+  static Future<List<AppUserModel>> _getActiveDriversFromUsers() async {
     final snapshot = await _users.where('role', isEqualTo: 'driver').get();
 
     return snapshot.docs
         .map((doc) => AppUserModel.fromMap(doc.data()))
         .where((user) => user.isActive)
         .toList()
-      ..sort((a, b) => a.fullName.compareTo(b.fullName));
+      ..sort(_sortUsersByName);
+  }
+
+  static Future<List<AppUserModel>> rebuildDriverIndex() async {
+    final drivers = await _getActiveDriversFromUsers();
+
+    await _driverIndexDoc.set({
+      'drivers': drivers.map(_driverIndexEntry).toList(),
+      'updatedAt': DateTime.now().toIso8601String(),
+    });
+
+    return drivers;
   }
 
   static Future<AppUserModel> createUser({
@@ -243,6 +273,12 @@ class AppUserService {
           _userStatsDelta(newUser: appUser),
           SetOptions(merge: true),
         );
+        if (_isActiveDriver(appUser)) {
+          batch.set(_driverIndexDoc, {
+            'drivers': FieldValue.arrayUnion([_driverIndexEntry(appUser)]),
+            'updatedAt': now,
+          }, SetOptions(merge: true));
+        }
         await batch.commit();
       } catch (_) {
         await user.delete();
@@ -263,6 +299,17 @@ class AppUserService {
       final oldUser = snapshot.exists && snapshot.data() != null
           ? AppUserModel.fromMap(snapshot.data()!)
           : null;
+      final shouldUpdateDriverIndex = _driverIndexShouldChange(oldUser, user);
+      final driverIndexSnapshot = shouldUpdateDriverIndex
+          ? await transaction.get(_driverIndexDoc)
+          : null;
+      final driverIndexEntries = shouldUpdateDriverIndex
+          ? _updatedDriverIndexEntries(
+              driverIndexSnapshot?.data()?['drivers'],
+              oldUser: oldUser,
+              newUser: user,
+            )
+          : null;
 
       transaction.set(userRef, user.toMap(), SetOptions(merge: true));
       transaction.set(
@@ -270,6 +317,13 @@ class AppUserService {
         _userStatsDelta(oldUser: oldUser, newUser: user),
         SetOptions(merge: true),
       );
+
+      if (driverIndexEntries != null) {
+        transaction.set(_driverIndexDoc, {
+          'drivers': driverIndexEntries,
+          'updatedAt': DateTime.now().toIso8601String(),
+        }, SetOptions(merge: true));
+      }
     });
   }
 
@@ -287,5 +341,85 @@ class AppUserService {
 
   static Future<void> sendPasswordReset(String email) async {
     await _auth.sendPasswordResetEmail(email: email.trim());
+  }
+
+  static Future<void> _writeDriverIndexFromUsers(
+    List<AppUserModel> users,
+  ) async {
+    final drivers = users.where(_isActiveDriver).toList()
+      ..sort(_sortUsersByName);
+
+    await _driverIndexDoc.set({
+      'drivers': drivers.map(_driverIndexEntry).toList(),
+      'updatedAt': DateTime.now().toIso8601String(),
+    });
+  }
+
+  static bool _driverIndexShouldChange(
+    AppUserModel? oldUser,
+    AppUserModel newUser,
+  ) {
+    if (_isActiveDriver(oldUser) != _isActiveDriver(newUser)) return true;
+    if (!_isActiveDriver(newUser)) return false;
+
+    return oldUser?.fullName.trim() != newUser.fullName.trim() ||
+        oldUser?.email.trim() != newUser.email.trim() ||
+        oldUser?.department.trim() != newUser.department.trim();
+  }
+
+  static List<Map<String, dynamic>> _updatedDriverIndexEntries(
+    dynamic rawDrivers, {
+    required AppUserModel? oldUser,
+    required AppUserModel newUser,
+  }) {
+    final entries = rawDrivers is List
+        ? rawDrivers
+              .whereType<Map>()
+              .map((driver) => Map<String, dynamic>.from(driver))
+              .toList()
+        : <Map<String, dynamic>>[];
+
+    final oldUserId = oldUser?.userId.trim();
+    final newUserId = newUser.userId.trim();
+    entries.removeWhere((driver) {
+      final driverUserId = (driver['userId'] ?? '').toString().trim();
+      return driverUserId == oldUserId || driverUserId == newUserId;
+    });
+
+    if (_isActiveDriver(newUser)) {
+      entries.add(_driverIndexEntry(newUser));
+    }
+
+    entries.sort((a, b) {
+      final aName = (a['fullName'] ?? a['email'] ?? '').toString();
+      final bName = (b['fullName'] ?? b['email'] ?? '').toString();
+      return aName.toLowerCase().compareTo(bName.toLowerCase());
+    });
+
+    return entries;
+  }
+
+  static bool _isActiveDriver(AppUserModel? user) {
+    if (user == null || !user.isActive) return false;
+    return user.role.trim().toLowerCase() == 'driver';
+  }
+
+  static Map<String, dynamic> _driverIndexEntry(AppUserModel user) {
+    return {
+      'userId': user.userId.trim(),
+      'fullName': user.fullName.trim(),
+      'email': user.email.trim(),
+      'department': user.department.trim(),
+      'role': 'driver',
+      'isActive': true,
+      'createdAt': user.createdAt,
+      'updatedAt': user.updatedAt,
+    };
+  }
+
+  static int _sortUsersByName(AppUserModel a, AppUserModel b) {
+    final aName = a.fullName.trim().isEmpty ? a.email : a.fullName;
+    final bName = b.fullName.trim().isEmpty ? b.email : b.fullName;
+    return aName.toLowerCase().compareTo(bName.toLowerCase());
   }
 }

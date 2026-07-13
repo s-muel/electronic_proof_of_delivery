@@ -26,6 +26,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
   List<WaybillModel> pendingSyncWaybills = [];
   int assignedWaybillCount = 0;
   int pendingDeliveryCount = 0;
+  String driverName = '';
   bool isSyncing = false;
 
   List<WaybillModel> get visibleWaybills {
@@ -35,9 +36,33 @@ class _DriverDashboardState extends State<DriverDashboard> {
   @override
   void initState() {
     super.initState();
+    loadDriverProfile();
     loadPendingWaybills();
     if (!shouldSkipAutomaticFirebaseRefresh) {
       refreshDashboard();
+    }
+  }
+
+  Future<void> loadDriverProfile() async {
+    final firebaseUser = FirebaseAuthService.currentFirebaseUser;
+    final fallbackName = firebaseUser?.displayName?.trim().isNotEmpty == true
+        ? firebaseUser!.displayName!.trim()
+        : firebaseUser?.email ?? '';
+
+    try {
+      final profile = await FirebaseAuthService.getCurrentUserProfile();
+      final profileName = profile?.fullName.trim() ?? '';
+
+      if (!mounted) return;
+
+      setState(() {
+        driverName = profileName.isNotEmpty ? profileName : fallbackName;
+      });
+    } catch (error) {
+      debugPrint('DRIVER PROFILE LOAD ERROR: $error');
+      if (!mounted) return;
+
+      setState(() => driverName = fallbackName);
     }
   }
 
@@ -273,17 +298,39 @@ class _DriverDashboardState extends State<DriverDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    final isWideScreen = MediaQuery.of(context).size.width > 800;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWideScreen = screenWidth > 800;
+    final isCompactAppBar = screenWidth < 560;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [Text('Driver Dashboard')],
+        titleSpacing: 8,
+        title: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: isCompactAppBar ? 142 : 420),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Driver Dashboard',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: isCompactAppBar ? 16 : null),
+              ),
+              if (driverName.trim().isNotEmpty)
+                Text(
+                  driverName,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: isCompactAppBar ? 10 : 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+            ],
+          ),
         ),
         actions: [
           NetworkStatusChip(onSyncNow: refreshDashboard, isSyncing: isSyncing),
-          SizedBox(width: 8),
+          SizedBox(width: isCompactAppBar ? 2 : 8),
           IconButton(
             onPressed: () => _logout(context),
             icon: const Icon(Icons.logout),
@@ -342,25 +389,13 @@ class _DriverDashboardState extends State<DriverDashboard> {
       ),
     ];
 
-    if (isWideScreen) {
-      return Row(
-        children: [
-          Expanded(child: cards[0]),
-          const SizedBox(width: 12),
-          Expanded(child: cards[1]),
-          const SizedBox(width: 12),
-          Expanded(child: cards[2]),
-        ],
-      );
-    }
-
-    return Column(
+    return Row(
       children: [
-        cards[0],
-        const SizedBox(height: 10),
-        cards[1],
-        const SizedBox(height: 10),
-        cards[2],
+        Expanded(child: cards[0]),
+        SizedBox(width: isWideScreen ? 12 : 6),
+        Expanded(child: cards[1]),
+        SizedBox(width: isWideScreen ? 12 : 6),
+        Expanded(child: cards[2]),
       ],
     );
   }
@@ -521,56 +556,71 @@ class _DriverSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cardContent = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color, size: 24),
+    final cardContent = LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 150;
+        final iconSize = isCompact ? 30.0 : 42.0;
+
+        return Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: isCompact ? 8 : 14,
+            vertical: isCompact ? 10 : 12,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  count.toString(),
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    height: 1,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  title,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-              ],
-            ),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color.withValues(alpha: 0.25)),
           ),
-          if (onTap != null)
-            Icon(Icons.arrow_forward_ios, color: color, size: 16),
-        ],
-      ),
+          child: Row(
+            children: [
+              Container(
+                width: iconSize,
+                height: iconSize,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: isCompact ? 18 : 24),
+              ),
+              SizedBox(width: isCompact ? 6 : 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      count.toString(),
+                      style: TextStyle(
+                        color: color,
+                        fontSize: isCompact ? 18 : 24,
+                        fontWeight: FontWeight.bold,
+                        height: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      title,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      style: TextStyle(
+                        fontSize: isCompact ? 10 : 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (onTap != null)
+                Icon(
+                  Icons.arrow_forward_ios,
+                  color: color,
+                  size: isCompact ? 11 : 16,
+                ),
+            ],
+          ),
+        );
+      },
     );
 
     return Card(

@@ -59,11 +59,16 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
       setState(() {
         drivers = loadedDrivers;
       });
-    } catch (_) {
+    } catch (error) {
+      debugPrint('CREATE WAYBILL DRIVER LOAD ERROR: $error');
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not load driver list.')),
+        const SnackBar(
+          content: Text(
+            'Could not load driver list. Rebuild the driver index or check access rules.',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => isLoadingDrivers = false);
