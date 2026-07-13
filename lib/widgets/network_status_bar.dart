@@ -74,6 +74,7 @@ class _NetworkStatusChipState extends State<NetworkStatusChip> {
     final isConnected = _isOnline == true;
     final color = isConnected ? Colors.green : Colors.red;
     final label = isConnected ? 'Online' : 'Offline';
+    final isCompact = MediaQuery.of(context).size.width < 560;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -82,8 +83,11 @@ class _NetworkStatusChipState extends State<NetworkStatusChip> {
           onTap: _checkConnection,
           borderRadius: BorderRadius.circular(20),
           child: Container(
-            margin: const EdgeInsets.only(left: 10),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            margin: EdgeInsets.only(left: isCompact ? 0 : 10),
+            padding: EdgeInsets.symmetric(
+              horizontal: isCompact ? 8 : 10,
+              vertical: isCompact ? 8 : 5,
+            ),
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(20),
@@ -104,16 +108,20 @@ class _NetworkStatusChipState extends State<NetworkStatusChip> {
                     color: color,
                     size: 16,
                   ),
-                const SizedBox(width: 6),
-                Text(
-                  _isChecking && _isOnline == null ? 'Checking' : label,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                if (!isCompact) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    _isChecking && _isOnline == null ? 'Checking' : label,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                if (!isConnected && !(_isChecking && _isOnline == null)) ...[
+                ],
+                if (!isCompact &&
+                    !isConnected &&
+                    !(_isChecking && _isOnline == null)) ...[
                   const SizedBox(width: 6),
                   Icon(Icons.refresh, color: color, size: 15),
                 ],
@@ -121,30 +129,53 @@ class _NetworkStatusChipState extends State<NetworkStatusChip> {
             ),
           ),
         ),
-        if (widget.onSyncNow != null) const SizedBox(width: 8),
+        if (widget.onSyncNow != null) SizedBox(width: isCompact ? 4 : 8),
         if (widget.onSyncNow != null)
-          TextButton.icon(
-            onPressed: widget.isSyncing ? null : widget.onSyncNow,
-            icon: widget.isSyncing
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.cloud_sync, size: 18),
-            label: Text(widget.isSyncing ? 'Syncing' : 'Sync Now'),
-            style: TextButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.blue,
-              visualDensity: VisualDensity.compact,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-                side: BorderSide(color: Colors.blue.withValues(alpha: 0.35)),
-              ),
-            ),
-          ),
+          isCompact
+              ? IconButton.filledTonal(
+                  tooltip: widget.isSyncing ? 'Syncing' : 'Sync Now',
+                  onPressed: widget.isSyncing ? null : widget.onSyncNow,
+                  icon: widget.isSyncing
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.cloud_sync, size: 18),
+                  style: IconButton.styleFrom(
+                    foregroundColor: Colors.blue,
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    minimumSize: const Size(34, 34),
+                  ),
+                )
+              : TextButton.icon(
+                  onPressed: widget.isSyncing ? null : widget.onSyncNow,
+                  icon: widget.isSyncing
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.cloud_sync, size: 18),
+                  label: Text(widget.isSyncing ? 'Syncing' : 'Sync Now'),
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.blue,
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                      side: BorderSide(
+                        color: Colors.blue.withValues(alpha: 0.35),
+                      ),
+                    ),
+                  ),
+                ),
       ],
     );
   }
