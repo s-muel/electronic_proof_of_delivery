@@ -85,14 +85,15 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
         }
         isLoadingDrivers = false;
       });
-    } catch (_) {
+    } catch (error) {
+      debugPrint('EDIT WAYBILL DRIVER LOAD ERROR: $error');
       if (!mounted) return;
 
       setState(() => isLoadingDrivers = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Unable to load drivers. Please check your connection.',
+            'Unable to load drivers. Rebuild the driver index or check access rules.',
           ),
         ),
       );
