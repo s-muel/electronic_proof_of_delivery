@@ -347,7 +347,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     var obscurePassword = true;
     var obscureConfirmPassword = true;
 
-    final userCreated = await showDialog<bool>(
+    final createdUser = await showDialog<AppUserModel>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
@@ -550,7 +550,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                           setDialogState(() => isSaving = true);
 
                           try {
-                            await AppUserService.createUser(
+                            final createdUser = await AppUserService.createUser(
                               fullName: fullNameController.text,
                               email: emailController.text,
                               password: passwordController.text,
@@ -561,7 +561,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                             );
 
                             if (!dialogContext.mounted) return;
-                            Navigator.pop(dialogContext, true);
+                            Navigator.pop(dialogContext, createdUser);
                           } catch (error) {
                             if (!dialogContext.mounted) return;
                             ScaffoldMessenger.of(dialogContext).showSnackBar(
@@ -593,15 +593,69 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     passwordController.dispose();
     confirmPasswordController.dispose();
 
-    if (userCreated == true) {
-      await loadAdminData();
-
-      if (!mounted) return;
+    if (createdUser != null) {
+      _applyCreatedUser(createdUser);
 
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('User added successfully')));
     }
+  }
+
+  void _applyCreatedUser(AppUserModel createdUser) {
+    if (!mounted) return;
+
+    setState(() {
+      userStats = _userStatsAfterCreate(userStats, createdUser);
+
+      if (selectedPage != 'users') return;
+
+      final roleMatches =
+          selectedUserRoleFilter == null ||
+          _roleLabel(createdUser.role) == selectedUserRoleFilter;
+      if (!roleMatches) return;
+
+      final updatedUsers = [createdUser, ...users];
+      final hasOverflow = updatedUsers.length > _userItemsPerPage;
+      users = hasOverflow
+          ? updatedUsers.take(_userItemsPerPage).toList()
+          : updatedUsers;
+
+      if (_usingServerUserPagination) {
+        _userCurrentPage = 0;
+        _userHasNextPage = _userHasNextPage || hasOverflow;
+        _userPageCursors
+          ..clear()
+          ..add(null);
+        _userPageCache
+          ..clear()
+          ..[0] = users;
+        _userPageHasMoreCache
+          ..clear()
+          ..[0] = _userHasNextPage;
+      }
+    });
+  }
+
+  UserStatsModel _userStatsAfterCreate(
+    UserStatsModel? currentStats,
+    AppUserModel createdUser,
+  ) {
+    final stats = currentStats ?? UserStatsModel.fromUsers(users);
+    final roleLabel = _roleLabel(createdUser.role);
+
+    return UserStatsModel(
+      total: stats.total + 1,
+      active: stats.active + (createdUser.isActive ? 1 : 0),
+      inactive: stats.inactive + (createdUser.isActive ? 0 : 1),
+      officers: stats.officers + (roleLabel == 'Officer' ? 1 : 0),
+      drivers: stats.drivers + (roleLabel == 'Driver' ? 1 : 0),
+      accounts: stats.accounts + (roleLabel == 'Accounts' ? 1 : 0),
+      management: stats.management + (roleLabel == 'Management' ? 1 : 0),
+      managers: stats.managers + (roleLabel == 'Manager' ? 1 : 0),
+      superUsers: stats.superUsers + (roleLabel == 'Super User' ? 1 : 0),
+      updatedAt: DateTime.now().toIso8601String(),
+    );
   }
 
   String? _requiredValidator(String? value) {
