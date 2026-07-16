@@ -37,6 +37,14 @@ class FirestoreWaybillService {
   static CollectionReference<Map<String, dynamic>> get _waybills =>
       _firestore.collection(_collectionName);
 
+  static Future<String> previewNextWaybillNumber() async {
+    final counterSnapshot = await _firestore.doc(_counterDocumentPath).get();
+    final data = counterSnapshot.data();
+    final lastNumber = data?['lastNumber'] as int? ?? 0;
+
+    return _formatWaybillNumber(lastNumber + 1);
+  }
+
   static Future<String> generateNextWaybillNumber() async {
     return _firestore.runTransaction((transaction) async {
       final counterRef = _firestore.doc(_counterDocumentPath);
@@ -53,8 +61,12 @@ class FirestoreWaybillService {
         'updatedAt': now,
       }, SetOptions(merge: true));
 
-      return '$_waybillPrefix${nextNumber.toString().padLeft(_waybillPadding, '0')}';
+      return _formatWaybillNumber(nextNumber);
     });
+  }
+
+  static String _formatWaybillNumber(int number) {
+    return '$_waybillPrefix${number.toString().padLeft(_waybillPadding, '0')}';
   }
 
   static Future<void> createWaybill(WaybillModel waybill) async {
