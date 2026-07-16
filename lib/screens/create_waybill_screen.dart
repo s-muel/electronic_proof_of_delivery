@@ -18,6 +18,7 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
   final _formKey = GlobalKey<FormState>();
   bool isSaving = false;
   bool isLoadingDrivers = false;
+  bool isLoadingWaybillNumber = false;
   List<AppUserModel> drivers = [];
   AppUserModel? selectedDriver;
 
@@ -43,8 +44,48 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
   void initState() {
     super.initState();
     dateController.text = _formatDate(DateTime.now());
-    waybillNumberController.text = WaybillService.generateNextWaybillNumber();
+    loadWaybillNumberPreview();
     loadDrivers();
+  }
+
+  Future<void> loadWaybillNumberPreview() async {
+    if (!shouldUseFirestoreData) {
+      waybillNumberController.text = WaybillService.generateNextWaybillNumber();
+      return;
+    }
+
+    setState(() {
+      isLoadingWaybillNumber = true;
+      waybillNumberController.clear();
+    });
+
+    try {
+      final nextWaybillNumber =
+          await FirestoreWaybillService.previewNextWaybillNumber();
+      if (!mounted) return;
+
+      setState(() {
+        waybillNumberController.text = nextWaybillNumber;
+      });
+    } catch (error) {
+      debugPrint('CREATE WAYBILL NUMBER LOAD ERROR: $error');
+      if (!mounted) return;
+
+      setState(() {
+        waybillNumberController.text =
+            WaybillService.generateNextWaybillNumber();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not load latest waybill number. Check connection or counter access.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => isLoadingWaybillNumber = false);
+    }
   }
 
   Future<void> loadDrivers() async {
@@ -98,6 +139,15 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
 
   Future<void> saveWaybill() async {
     if (isSaving) return;
+
+    if (isLoadingWaybillNumber) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please wait for the waybill number to load.'),
+        ),
+      );
+      return;
+    }
 
     if (_formKey.currentState!.validate()) {
       if (selectedDriver == null) {
@@ -216,6 +266,7 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
     bool readOnly = false,
     IconData? icon,
     String? helperText,
+    Widget? suffixIcon,
   }) {
     return TextFormField(
       controller: controller,
@@ -225,6 +276,7 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
         labelText: label,
         helperText: helperText,
         prefixIcon: icon == null ? null : Icon(icon),
+        suffixIcon: suffixIcon,
         filled: true,
         fillColor: readOnly ? const Color(0xFFEFF3F8) : Colors.white,
         contentPadding: const EdgeInsets.symmetric(
@@ -553,7 +605,21 @@ class _CreateWaybillScreenState extends State<CreateWaybillScreen> {
                           controller: waybillNumberController,
                           readOnly: true,
                           icon: Icons.auto_awesome,
-                          helperText: 'Auto-generated',
+                          helperText: isLoadingWaybillNumber
+                              ? 'Loading latest waybill number...'
+                              : 'Auto-generated',
+                          suffixIcon: isLoadingWaybillNumber
+                              ? const Padding(
+                                  padding: EdgeInsets.all(14),
+                                  child: SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                )
+                              : null,
                         ),
                       ),
                       _fieldBox(
