@@ -87,7 +87,12 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     if (shouldUseFirestoreData) {
       try {
         loadedUserStats = await AppUserService.getUserStats();
-        loadedUserStats ??= await AppUserService.rebuildUserStats();
+        if (loadedUserStats == null) {
+          debugPrint(
+            'SUPER USER STATS LOAD WARNING: appStats/usersSummary is missing.',
+          );
+          loadWarning = StateError('Missing appStats/usersSummary');
+        }
       } catch (error) {
         debugPrint('SUPER USER STATS LOAD ERROR: $error');
         loadWarning = error;
@@ -165,7 +170,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Some admin data used cached values. Check debug console.',
+            'Some admin stats are missing. Use Rebuild Stats if counts look wrong.',
           ),
         ),
       );
@@ -1033,6 +1038,14 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 920;
         final sidebar = _superUserSidebar(isWide: isWide);
+        final content = isWide
+            ? Row(
+                children: [
+                  SizedBox(width: 250, child: sidebar),
+                  Expanded(child: body),
+                ],
+              )
+            : body;
 
         return Scaffold(
           backgroundColor: _background,
@@ -1061,14 +1074,18 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                   ],
                 ),
           drawer: isWide ? null : Drawer(child: sidebar),
-          body: isWide
-              ? Row(
-                  children: [
-                    SizedBox(width: 250, child: sidebar),
-                    Expanded(child: body),
-                  ],
-                )
-              : body,
+          body: Stack(
+            children: [
+              Positioned.fill(child: content),
+              if (isLoading)
+                const Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: LinearProgressIndicator(minHeight: 3),
+                ),
+            ],
+          ),
         );
       },
     );
@@ -1346,6 +1363,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
             value: bills.total.toString(),
             icon: Icons.receipt_long,
             color: Colors.indigo,
+            isLoading: isLoading,
             onTap: () => _openFilteredWaybills(null),
           ),
           _superSummaryCard(
@@ -1353,6 +1371,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
             value: bills.pendingDelivery.toString(),
             icon: Icons.schedule,
             color: Colors.orange,
+            isLoading: isLoading,
             onTap: () => _openFilteredWaybills('pending'),
           ),
           _superSummaryCard(
@@ -1360,6 +1379,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
             value: bills.delivered.toString(),
             icon: Icons.local_shipping,
             color: Colors.blue,
+            isLoading: isLoading,
             onTap: () => _openFilteredWaybills('delivered'),
           ),
           _superSummaryCard(
@@ -1367,6 +1387,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
             value: bills.sentForInvoicing.toString(),
             icon: Icons.outbox,
             color: Colors.deepPurple,
+            isLoading: isLoading,
             onTap: () => _openFilteredWaybills('sentForInvoicing'),
           ),
           _superSummaryCard(
@@ -1374,6 +1395,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
             value: bills.invoiced.toString(),
             icon: Icons.done_all,
             color: Colors.green,
+            isLoading: isLoading,
             onTap: () => _openFilteredWaybills('invoiced'),
           ),
           _superSummaryCard(
@@ -1381,6 +1403,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
             value: bills.rejected.toString(),
             icon: Icons.report_problem,
             color: Colors.red,
+            isLoading: isLoading,
             onTap: () => _openFilteredWaybills('rejected'),
           ),
         ]),
@@ -1392,6 +1415,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
             value: users.superUsers.toString(),
             icon: Icons.admin_panel_settings,
             color: _primary,
+            isLoading: isLoading,
             onTap: () => _openFilteredUsers('Super User'),
           ),
           _superSummaryCard(
@@ -1399,6 +1423,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
             value: users.officers.toString(),
             icon: Icons.assignment_ind,
             color: Colors.indigo,
+            isLoading: isLoading,
             onTap: () => _openFilteredUsers('Officer'),
           ),
           _superSummaryCard(
@@ -1406,6 +1431,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
             value: users.drivers.toString(),
             icon: Icons.local_shipping,
             color: Colors.blue,
+            isLoading: isLoading,
             onTap: () => _openFilteredUsers('Driver'),
           ),
           _superSummaryCard(
@@ -1413,6 +1439,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
             value: users.accounts.toString(),
             icon: Icons.receipt_long,
             color: Colors.green,
+            isLoading: isLoading,
             onTap: () => _openFilteredUsers('Accounts'),
           ),
           _superSummaryCard(
@@ -1420,6 +1447,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
             value: users.management.toString(),
             icon: Icons.insights,
             color: Colors.orange,
+            isLoading: isLoading,
             onTap: () => _openFilteredUsers('Management'),
           ),
           _superSummaryCard(
@@ -1427,6 +1455,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
             value: users.managers.toString(),
             icon: Icons.manage_accounts,
             color: Colors.red,
+            isLoading: isLoading,
             onTap: () => _openFilteredUsers('Manager'),
           ),
         ]),
@@ -1475,6 +1504,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     required IconData icon,
     required Color color,
     required VoidCallback onTap,
+    bool isLoading = false,
   }) {
     return Material(
       color: _surface,
@@ -1513,15 +1543,17 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      value,
-                      style: TextStyle(
-                        color: color,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        height: 1,
-                      ),
-                    ),
+                    isLoading
+                        ? _loadingValue(color)
+                        : Text(
+                            value,
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              height: 1,
+                            ),
+                          ),
                     const SizedBox(height: 5),
                     Text(
                       title,
@@ -1541,6 +1573,14 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _loadingValue(Color color) {
+    return SizedBox(
+      width: 20,
+      height: 20,
+      child: CircularProgressIndicator(strokeWidth: 2.4, color: color),
     );
   }
 
@@ -1751,11 +1791,16 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                     ),
                   ),
                 ),
-                _miniMetric('Users', isLoading ? '--' : activeUsers.toString()),
+                _miniMetric(
+                  'Users',
+                  activeUsers.toString(),
+                  isLoading: isLoading,
+                ),
                 const SizedBox(width: 12),
                 _miniMetric(
                   'Waybills',
-                  isLoading ? '--' : activeWaybills.toString(),
+                  activeWaybills.toString(),
+                  isLoading: isLoading,
                 ),
               ],
             ),
@@ -1765,18 +1810,20 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     );
   }
 
-  Widget _miniMetric(String label, String value) {
+  Widget _miniMetric(String label, String value, {bool isLoading = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Text(
-          value,
-          style: const TextStyle(
-            color: _primary,
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
+        isLoading
+            ? _loadingValue(_primary)
+            : Text(
+                value,
+                style: const TextStyle(
+                  color: _primary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
         Text(
           label,
           style: const TextStyle(color: _onSurfaceVariant, fontSize: 11),
