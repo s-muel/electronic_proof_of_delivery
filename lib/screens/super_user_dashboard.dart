@@ -1374,7 +1374,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
           ),
           _superSummaryCard(
             title: 'Delivered',
-            value: bills.delivered.toString(),
+            value: bills.readyForInvoice.toString(),
             icon: Icons.local_shipping,
             color: Colors.blue,
             onTap: () => _openFilteredWaybills('delivered'),
@@ -2548,7 +2548,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
               waybill.invoiceStatus != WaybillService.invoiceRejectedStatus;
         case 'delivered':
           return waybill.status == WaybillService.deliveredStatus &&
-              waybill.invoiceStatus != WaybillService.invoiceRejectedStatus;
+              waybill.invoiceStatus == WaybillService.invoiceNotSentStatus;
         case 'sentForInvoicing':
           return waybill.invoiceStatus == WaybillService.invoiceSentStatus;
         case 'invoiced':
