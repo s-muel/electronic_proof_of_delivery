@@ -13,6 +13,7 @@ class WaybillStatsModel {
   final int damaged;
   final int parkingUnsuitable;
   final int partOrder;
+  final int deleted;
   final String updatedAt;
 
   const WaybillStatsModel({
@@ -28,6 +29,7 @@ class WaybillStatsModel {
     required this.damaged,
     required this.parkingUnsuitable,
     required this.partOrder,
+    required this.deleted,
     required this.updatedAt,
   });
 
@@ -45,6 +47,7 @@ class WaybillStatsModel {
       damaged: 0,
       parkingUnsuitable: 0,
       partOrder: 0,
+      deleted: 0,
       updatedAt: '',
     );
   }
@@ -63,6 +66,7 @@ class WaybillStatsModel {
       damaged: (map['damaged'] as num?)?.toInt() ?? 0,
       parkingUnsuitable: (map['parkingUnsuitable'] as num?)?.toInt() ?? 0,
       partOrder: (map['partOrder'] as num?)?.toInt() ?? 0,
+      deleted: (map['deleted'] as num?)?.toInt() ?? 0,
       updatedAt: map['updatedAt'] ?? '',
     );
   }
@@ -80,9 +84,13 @@ class WaybillStatsModel {
     var damaged = 0;
     var parkingUnsuitable = 0;
     var partOrder = 0;
+    var deleted = 0;
 
     for (final waybill in waybills) {
-      if (waybill.isDeleted) continue;
+      if (waybill.isDeleted) {
+        deleted++;
+        continue;
+      }
 
       total++;
 
@@ -118,6 +126,7 @@ class WaybillStatsModel {
       damaged: damaged,
       parkingUnsuitable: parkingUnsuitable,
       partOrder: partOrder,
+      deleted: deleted,
       updatedAt: DateTime.now().toIso8601String(),
     );
   }
@@ -136,6 +145,7 @@ class WaybillStatsModel {
       'damaged': damaged,
       'parkingUnsuitable': parkingUnsuitable,
       'partOrder': partOrder,
+      'deleted': deleted,
       'updatedAt': updatedAt,
     };
   }

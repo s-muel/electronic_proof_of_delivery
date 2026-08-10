@@ -1014,9 +1014,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     final effectiveWaybillStats =
         waybillStats ?? WaybillStatsModel.fromWaybills(waybills);
     final activeUsers = effectiveUserStats.active;
-    final deletedWaybills = waybills
-        .where((waybill) => waybill.isDeleted)
-        .length;
+    final deletedWaybills = effectiveWaybillStats.deleted;
     final activeWaybills = effectiveWaybillStats.total;
 
     Widget body;
