@@ -29,7 +29,7 @@ class _ManagementDashboardState extends State<ManagementDashboard> {
       dashboardStats?.pendingDelivery ?? _pendingWaybills.length;
 
   int get _deliveredCount =>
-      dashboardStats?.delivered ?? _deliveredWaybills.length;
+      dashboardStats?.readyForInvoice ?? _deliveredWaybills.length;
 
   int get _sentForInvoicingCount =>
       dashboardStats?.sentForInvoicing ?? _sentForInvoicingWaybills.length;
@@ -149,7 +149,11 @@ class _ManagementDashboardState extends State<ManagementDashboard> {
       .toList();
 
   List<WaybillModel> get _deliveredWaybills => waybills
-      .where((waybill) => waybill.status == WaybillService.deliveredStatus)
+      .where(
+        (waybill) =>
+            waybill.status == WaybillService.deliveredStatus &&
+            waybill.invoiceStatus == WaybillService.invoiceNotSentStatus,
+      )
       .toList();
 
   List<WaybillModel> get _invoicedWaybills => waybills
@@ -485,6 +489,7 @@ class _ManagementDashboardState extends State<ManagementDashboard> {
       selectedWaybills: _deliveredWaybills,
       cardKey: 'delivered',
       serverStatusFilter: WaybillService.deliveredStatus,
+      serverInvoiceStatusFilter: WaybillService.invoiceNotSentStatus,
     );
   }
 
@@ -737,6 +742,10 @@ class _ManagementWaybillListScreenState
       return stats.pendingDelivery;
     }
     if (widget.serverStatusFilter == WaybillService.deliveredStatus) {
+      if (widget.serverInvoiceStatusFilter ==
+          WaybillService.invoiceNotSentStatus) {
+        return stats.readyForInvoice;
+      }
       return stats.delivered;
     }
     if (widget.serverStatusFilter == WaybillService.invoicedStatus) {
@@ -771,6 +780,15 @@ class _ManagementWaybillListScreenState
     final invoiceStatusFilter = widget.serverInvoiceStatusFilter;
     final exceptionFilter = widget.serverExceptionFilter;
 
+    if (statusFilter != null && invoiceStatusFilter != null) {
+      return cachedWaybills
+          .where(
+            (waybill) =>
+                waybill.status == statusFilter &&
+                waybill.invoiceStatus == invoiceStatusFilter,
+          )
+          .toList();
+    }
     if (statusFilter != null) {
       return cachedWaybills
           .where((waybill) => waybill.status == statusFilter)
@@ -830,7 +848,16 @@ class _ManagementWaybillListScreenState
     setState(() => _isLoadingPage = true);
 
     try {
-      final page = widget.serverStatusFilter != null
+      final page =
+          widget.serverStatusFilter != null &&
+              widget.serverInvoiceStatusFilter != null
+          ? await FirestoreWaybillService.getWaybillsByStatusAndInvoiceStatusPage(
+              widget.serverStatusFilter!,
+              widget.serverInvoiceStatusFilter!,
+              limit: _itemsPerPage,
+              startAfterDocument: _pageCursors[pageIndex],
+            )
+          : widget.serverStatusFilter != null
           ? await FirestoreWaybillService.getWaybillsByStatusPage(
               widget.serverStatusFilter!,
               limit: _itemsPerPage,
