@@ -857,6 +857,8 @@ class FirestoreWaybillService {
   }) {
     final previousCounts = _statsContribution(previousWaybill);
     final nextCounts = _statsContribution(nextWaybill);
+    final previousDeleted = previousWaybill?.isDeleted == true ? 1 : 0;
+    final nextDeleted = nextWaybill?.isDeleted == true ? 1 : 0;
     final updates = <String, dynamic>{
       'updatedAt': DateTime.now().toIso8601String(),
     };
@@ -866,6 +868,11 @@ class FirestoreWaybillService {
       if (delta != 0) {
         updates[key] = FieldValue.increment(delta);
       }
+    }
+
+    final deletedDelta = nextDeleted - previousDeleted;
+    if (deletedDelta != 0) {
+      updates['deleted'] = FieldValue.increment(deletedDelta);
     }
 
     transaction.set(statsRef, updates, SetOptions(merge: true));
