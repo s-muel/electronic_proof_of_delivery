@@ -58,11 +58,13 @@ class PdfService {
                 _buildCargoSection(waybill),
                 _buildHazardSection(waybill),
                 _buildConditionSection(waybill),
-                _buildDeliverySection(waybill),
+                _buildDeliverySection(
+                  waybill,
+                  driverSignatureImage: driverSignatureImage,
+                ),
                 _buildSignatureSection(
                   waybill,
                   receiverSignatureImage: receiverSignatureImage,
-                  driverSignatureImage: driverSignatureImage,
                   receiverStampImage: receiverStampImage,
                 ),
                 _buildContactFooter(),
@@ -242,7 +244,19 @@ class PdfService {
     return pw.Row(
       children: [
         pw.Expanded(
-          child: _box(label: 'DATE', value: waybill.date, height: 42),
+          child: _box(
+            label: 'ISSUED BY',
+            value: _issuedByName(waybill),
+            height: 42,
+          ),
+        ),
+        pw.Expanded(
+          child: _box(
+            label: 'DATE AND TIME',
+            value: _formatIssuedDateTime(waybill),
+            height: 42,
+            valueWidget: _dateTimeValue(_formatIssuedDateTime(waybill)),
+          ),
         ),
         pw.Expanded(
           child: _box(label: 'P.O. NO.', value: waybill.poNumber, height: 42),
@@ -433,42 +447,26 @@ class PdfService {
     );
   }
 
-  static pw.Widget _buildDeliverySection(WaybillModel waybill) {
+  static pw.Widget _buildDeliverySection(
+    WaybillModel waybill, {
+    pw.MemoryImage? driverSignatureImage,
+  }) {
     return pw.Row(
       children: [
         pw.Expanded(
           child: _box(
-            label: 'GOODS RECEIVED BY',
-            value: waybill.receiverName,
-            height: 45,
-          ),
-        ),
-        pw.Expanded(
-          child: _box(
             label: 'VEHICLE NO.',
             value: waybill.vehicleNumber,
-            height: 45,
+            height: 65,
           ),
         ),
         pw.Expanded(
           child: _box(
             label: 'DRIVER NAME',
             value: waybill.driverName,
-            height: 45,
+            height: 65,
           ),
         ),
-      ],
-    );
-  }
-
-  static pw.Widget _buildSignatureSection(
-    WaybillModel waybill, {
-    pw.MemoryImage? receiverSignatureImage,
-    pw.MemoryImage? driverSignatureImage,
-    pw.MemoryImage? receiverStampImage,
-  }) {
-    return pw.Row(
-      children: [
         pw.Expanded(
           child: _signatureBox(
             label: 'DRIVER SIGNATURE',
@@ -478,10 +476,32 @@ class PdfService {
             signatureImage: driverSignatureImage,
           ),
         ),
+      ],
+    );
+  }
+
+  static pw.Widget _buildSignatureSection(
+    WaybillModel waybill, {
+    pw.MemoryImage? receiverSignatureImage,
+    pw.MemoryImage? receiverStampImage,
+  }) {
+    return pw.Row(
+      children: [
         pw.Expanded(
-          child: _signatureBox(
-            label: 'RECEIVER NAME',
+          child: _box(
+            label: 'GOODS RECEIVED BY',
             value: waybill.receiverName,
+            height: 65,
+          ),
+        ),
+        pw.Expanded(
+          child: _box(
+            label: 'DATE AND TIME',
+            value: _formatDeliveredDateTime(waybill.deliveredAt),
+            height: 65,
+            valueWidget: _dateTimeValue(
+              _formatDeliveredDateTime(waybill.deliveredAt),
+            ),
           ),
         ),
         pw.Expanded(
@@ -586,6 +606,7 @@ class PdfService {
     required String label,
     required String value,
     required double height,
+    pw.Widget? valueWidget,
   }) {
     return pw.Container(
       height: height,
@@ -601,7 +622,7 @@ class PdfService {
         children: [
           _label(label),
           pw.SizedBox(height: 4),
-          pw.Expanded(child: _value(value)),
+          pw.Expanded(child: valueWidget ?? _value(value)),
         ],
       ),
     );
@@ -620,5 +641,66 @@ class PdfService {
       style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
       maxLines: 4,
     );
+  }
+
+  static pw.Widget _dateTimeValue(String value) {
+    if (value.trim().isEmpty) return _value(value);
+
+    final parts = value.split('|');
+    if (parts.length != 2) return _value(value);
+
+    final style = pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold);
+
+    return pw.RichText(
+      text: pw.TextSpan(
+        style: style,
+        children: [
+          pw.TextSpan(text: parts[0].trimRight()),
+          pw.TextSpan(
+            text: ' | ',
+            style: style.copyWith(color: PdfColors.blue),
+          ),
+          pw.TextSpan(text: parts[1].trimLeft()),
+        ],
+      ),
+      maxLines: 2,
+    );
+  }
+
+  static String _formatDeliveredDateTime(String value) {
+    if (value.trim().isEmpty) return '';
+
+    final dateTime = DateTime.tryParse(value);
+    if (dateTime == null) return value;
+
+    return _formatDateAndTimeLines(dateTime);
+  }
+
+  static String _formatIssuedDateTime(WaybillModel waybill) {
+    if (waybill.createdAt.trim().isEmpty) return waybill.date;
+
+    final dateTime = DateTime.tryParse(waybill.createdAt);
+    if (dateTime == null) return waybill.date;
+
+    return _formatDateTime(dateTime);
+  }
+
+  static String _formatDateTime(DateTime dateTime) {
+    return _formatDateAndTimeLines(dateTime);
+  }
+
+  static String _formatDateAndTimeLines(DateTime dateTime) {
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    final date =
+        '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')}';
+
+    return '$date | $hour:$minute';
+  }
+
+  static String _issuedByName(WaybillModel waybill) {
+    return waybill.createdByName.trim().isEmpty
+        ? ''
+        : waybill.createdByName.trim();
   }
 }

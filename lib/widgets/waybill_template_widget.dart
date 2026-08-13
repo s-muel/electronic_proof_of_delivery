@@ -252,7 +252,15 @@ class WaybillTemplateWidget extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: _box(label: 'DATE', value: waybill.date, height: 58),
+          child: _box(label: 'ISSUED BY', value: _issuedByName(), height: 58),
+        ),
+        Expanded(
+          child: _box(
+            label: 'DATE AND TIME',
+            value: _formatIssuedDateTime(),
+            height: 58,
+            valueWidget: _dateTimeValue(_formatIssuedDateTime()),
+          ),
         ),
         Expanded(
           child: _box(label: 'P.O. NO.', value: waybill.poNumber, height: 58),
@@ -355,32 +363,18 @@ class WaybillTemplateWidget extends StatelessWidget {
       children: [
         Expanded(
           child: _box(
-            label: 'GOODS RECEIVED BY',
-            value: waybill.receiverName,
-            height: 62,
-          ),
-        ),
-        Expanded(
-          child: _box(
             label: 'VEHICLE NO.',
             value: waybill.vehicleNumber,
-            height: 62,
+            height: 110,
           ),
         ),
         Expanded(
           child: _box(
             label: 'DRIVER NAME',
             value: waybill.driverName,
-            height: 62,
+            height: 110,
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildSignatureSection() {
-    return Row(
-      children: [
         Expanded(
           child: _signatureBox(
             label: 'DRIVER SIGNATURE',
@@ -391,10 +385,28 @@ class WaybillTemplateWidget extends StatelessWidget {
             imageUrl: waybill.driverSignatureUrl,
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildSignatureSection() {
+    return Row(
+      children: [
         Expanded(
-          child: _signatureBox(
-            label: 'RECEIVER NAME',
+          child: _box(
+            label: 'GOODS RECEIVED BY',
             value: waybill.receiverName,
+            height: 110,
+          ),
+        ),
+        Expanded(
+          child: _box(
+            label: 'DATE AND TIME',
+            value: _formatDeliveredDateTime(waybill.deliveredAt),
+            height: 110,
+            valueWidget: _dateTimeValue(
+              _formatDeliveredDateTime(waybill.deliveredAt),
+            ),
           ),
         ),
         Expanded(
@@ -425,6 +437,7 @@ class WaybillTemplateWidget extends StatelessWidget {
     required String label,
     required String value,
     required double height,
+    Widget? valueWidget,
   }) {
     return Container(
       height: height,
@@ -442,7 +455,10 @@ class WaybillTemplateWidget extends StatelessWidget {
           _label(label),
           const SizedBox(height: 6),
           Expanded(
-            child: Align(alignment: Alignment.topLeft, child: _value(value)),
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: valueWidget ?? _value(value),
+            ),
           ),
         ],
       ),
@@ -540,5 +556,70 @@ class WaybillTemplateWidget extends StatelessWidget {
       ),
       overflow: TextOverflow.visible,
     );
+  }
+
+  Widget _dateTimeValue(String value) {
+    if (value.trim().isEmpty) return _value(value);
+
+    final parts = value.split('|');
+    if (parts.length != 2) return _value(value);
+
+    const style = TextStyle(
+      fontSize: 15,
+      fontWeight: FontWeight.w600,
+      color: Colors.black,
+    );
+
+    return RichText(
+      text: TextSpan(
+        style: style,
+        children: [
+          TextSpan(text: parts[0].trimRight()),
+          const TextSpan(
+            text: ' | ',
+            style: TextStyle(color: Colors.blue),
+          ),
+          TextSpan(text: parts[1].trimLeft()),
+        ],
+      ),
+      overflow: TextOverflow.visible,
+    );
+  }
+
+  String _formatDeliveredDateTime(String value) {
+    if (value.trim().isEmpty) return '';
+
+    final dateTime = DateTime.tryParse(value);
+    if (dateTime == null) return value;
+
+    return _formatDateAndTimeLines(dateTime);
+  }
+
+  String _formatIssuedDateTime() {
+    if (waybill.createdAt.trim().isEmpty) return waybill.date;
+
+    final dateTime = DateTime.tryParse(waybill.createdAt);
+    if (dateTime == null) return waybill.date;
+
+    return _formatDateTime(dateTime);
+  }
+
+  String _formatDateTime(DateTime dateTime) {
+    return _formatDateAndTimeLines(dateTime);
+  }
+
+  String _formatDateAndTimeLines(DateTime dateTime) {
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    final date =
+        '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')}';
+
+    return '$date | $hour:$minute';
+  }
+
+  String _issuedByName() {
+    return waybill.createdByName.trim().isEmpty
+        ? ''
+        : waybill.createdByName.trim();
   }
 }
