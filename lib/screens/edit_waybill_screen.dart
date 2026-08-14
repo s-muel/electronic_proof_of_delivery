@@ -200,32 +200,28 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
         updatedAt: now,
       );
 
-      await WaybillService.updateWaybill(widget.index, updatedWaybill);
       if (shouldUseFirestoreData) {
         try {
           await FirestoreWaybillService.updateWaybill(updatedWaybill);
-        } catch (_) {
+        } catch (error) {
+          debugPrint('EDIT WAYBILL FIRESTORE UPDATE ERROR: $error');
           if (!mounted) return;
 
+          setState(() => isUpdatingWaybill = false);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text(
-                'Waybill updated locally. It will need internet to sync online.',
+                'Could not save waybill changes online: $error',
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           );
-          if (resubmitToAccounts) {
-            Navigator.popUntil(context, (route) => route.isFirst);
-          } else {
-            if (resubmitToAccounts) {
-              Navigator.popUntil(context, (route) => route.isFirst);
-            } else {
-              Navigator.pop(context, true);
-            }
-          }
           return;
         }
       }
+
+      await WaybillService.updateWaybillByNumber(updatedWaybill);
 
       if (!mounted) return;
 
@@ -244,7 +240,7 @@ class _EditWaybillScreenState extends State<EditWaybillScreen> {
       if (resubmitToAccounts) {
         Navigator.popUntil(context, (route) => route.isFirst);
       } else {
-        Navigator.pop(context, true);
+        Navigator.pop(context, updatedWaybill);
       }
     }
   }

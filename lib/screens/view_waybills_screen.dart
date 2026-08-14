@@ -161,9 +161,41 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
       ),
     );
 
-    if (result == true) {
+    if (result is WaybillModel) {
+      _replaceVisibleWaybill(result);
+      _loadedPageCache.remove(_currentPage);
+      _pageHasMoreCache.remove(_currentPage);
+      _summaryWaybills = null;
+      await loadWaybills(pageIndex: _currentPage);
+    } else if (result == true) {
+      _loadedPageCache.remove(_currentPage);
+      _pageHasMoreCache.remove(_currentPage);
+      _summaryWaybills = null;
       await loadWaybills(pageIndex: _currentPage);
     }
+  }
+
+  void _replaceVisibleWaybill(WaybillModel updatedWaybill) {
+    void replaceIn(List<WaybillModel> source) {
+      final index = source.indexWhere(
+        (waybill) => waybill.waybillNumber == updatedWaybill.waybillNumber,
+      );
+      if (index != -1) {
+        source[index] = updatedWaybill;
+      }
+    }
+
+    setState(() {
+      replaceIn(allWaybills);
+      replaceIn(filteredWaybills);
+      final summaryWaybills = _summaryWaybills;
+      if (summaryWaybills != null) {
+        replaceIn(summaryWaybills);
+      }
+      for (final cachedPage in _loadedPageCache.values) {
+        replaceIn(cachedPage);
+      }
+    });
   }
 
   void openWaybillDetails(int index, WaybillModel waybill) async {
@@ -638,7 +670,12 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
           ),
           child: InkWell(
             borderRadius: BorderRadius.circular(18),
-            onTap: () => openWaybillDetails(index, waybill),
+            onTap: () {
+              final cachedIndex = WaybillService.getIndexByWaybillNumber(
+                waybill.waybillNumber,
+              );
+              openWaybillDetails(cachedIndex, waybill);
+            },
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Row(
@@ -691,7 +728,13 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
                       IconButton(
                         tooltip: 'View',
                         icon: const Icon(Icons.visibility, color: Colors.blue),
-                        onPressed: () => openWaybillDetails(index, waybill),
+                        onPressed: () {
+                          final cachedIndex =
+                              WaybillService.getIndexByWaybillNumber(
+                                waybill.waybillNumber,
+                              );
+                          openWaybillDetails(cachedIndex, waybill);
+                        },
                       ),
                       IconButton(
                         tooltip: isDownloading
@@ -714,7 +757,13 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
                         IconButton(
                           tooltip: 'Edit',
                           icon: const Icon(Icons.edit, color: Colors.blueGrey),
-                          onPressed: () => editWaybill(index, waybill),
+                          onPressed: () {
+                            final cachedIndex =
+                                WaybillService.getIndexByWaybillNumber(
+                                  waybill.waybillNumber,
+                                );
+                            editWaybill(cachedIndex, waybill);
+                          },
                         ),
                     ],
                   ),

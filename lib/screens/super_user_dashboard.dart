@@ -340,6 +340,92 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     );
   }
 
+  Future<void> _showReassignRoleDialog(AppUserModel user) async {
+    final roleOptions = <DropdownMenuItem<String>>[
+      const DropdownMenuItem(value: 'officer', child: Text('Officer')),
+      const DropdownMenuItem(value: 'driver', child: Text('Driver')),
+      const DropdownMenuItem(value: 'accounts', child: Text('Accounts')),
+      const DropdownMenuItem(value: 'management', child: Text('Management')),
+      const DropdownMenuItem(value: 'manager', child: Text('Manager')),
+      const DropdownMenuItem(
+        value: 'manager_officer',
+        child: Text('Manager/Officer'),
+      ),
+    ];
+    final allowedRoleValues = roleOptions
+        .map((item) => item.value)
+        .whereType<String>()
+        .toSet();
+    var selectedRole = user.role.trim().toLowerCase();
+
+    if (!allowedRoleValues.contains(selectedRole)) {
+      selectedRole = 'officer';
+    }
+
+    final newRole = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Reassign Role'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    user.fullName.trim().isEmpty ? user.email : user.fullName,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedRole,
+                    decoration: const InputDecoration(
+                      labelText: 'New Role',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: roleOptions,
+                    onChanged: (value) {
+                      if (value != null) {
+                        setDialogState(() => selectedRole = value);
+                      }
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: selectedRole == user.role.trim().toLowerCase()
+                      ? null
+                      : () => Navigator.pop(dialogContext, selectedRole),
+                  child: const Text('Save Role'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (newRole == null) return;
+
+    await AppUserService.updateUser(
+      user.copyWith(role: newRole, updatedAt: DateTime.now().toIso8601String()),
+    );
+
+    await loadAdminData();
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Role updated for ${user.fullName}')),
+    );
+  }
+
   Future<void> _showAddUserDialog() async {
     final formKey = GlobalKey<FormState>();
     final fullNameController = TextEditingController();
@@ -2301,6 +2387,12 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
           icon: const Icon(Icons.lock_reset),
           color: const Color(0xFF8FA0BC),
           tooltip: 'Send Password Reset',
+        ),
+        IconButton(
+          onPressed: () => _showReassignRoleDialog(user),
+          icon: const Icon(Icons.manage_accounts),
+          color: const Color(0xFF8FA0BC),
+          tooltip: 'Reassign Role',
         ),
         IconButton(
           onPressed: () => _toggleUserActive(user),
