@@ -537,6 +537,10 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
                                 onPressed: submitDelivery,
                                 icon: const Icon(Icons.check_circle),
                                 label: const Text('Submit Delivery'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0F5FB8),
+                                  foregroundColor: Colors.white,
+                                ),
                               ),
                             ),
                           ),
@@ -555,13 +559,17 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
 
                 const SizedBox(height: 12),
 
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: WaybillTemplateWidget(
-                    waybill: getPreviewWaybill(),
-                    receiverSignatureBytes: receiverSignatureBytes,
-                    driverSignatureBytes: driverSignatureBytes,
-                    receiverStampBytes: receiverStampBytes,
+                SizedBox(
+                  width: double.infinity,
+                  child: FittedBox(
+                    alignment: Alignment.topCenter,
+                    fit: BoxFit.contain,
+                    child: WaybillTemplateWidget(
+                      waybill: getPreviewWaybill(),
+                      receiverSignatureBytes: receiverSignatureBytes,
+                      driverSignatureBytes: driverSignatureBytes,
+                      receiverStampBytes: receiverStampBytes,
+                    ),
                   ),
                 ),
               ],

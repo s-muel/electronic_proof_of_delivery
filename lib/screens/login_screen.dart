@@ -87,9 +87,9 @@ class _LoginScreenState extends State<LoginScreen> {
       dashboard = const DriverDashboard();
     } else if (role == 'accounts') {
       dashboard = const AccountsDashboard();
-    } else if (role == 'management') {
+    } else if (role == 'management' || role == 'manager') {
       dashboard = const ManagementDashboard();
-    } else if (role == 'manager') {
+    } else if (role == 'manager_officer' || role == 'manager/officer') {
       dashboard = const ManagerDashboard();
     } else if (role == 'super_user' ||
         role == 'super user' ||
@@ -263,7 +263,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 14),
                   const Text(
-                    'v 0.2.4',
+                    'v 0.2.5',
                     style: TextStyle(
                       color: Colors.black38,
                       fontSize: 10,

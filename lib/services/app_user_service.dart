@@ -68,10 +68,14 @@ class AppUserService {
       descending: true,
     );
 
-    final normalizedRole = _roleValueForFilter(roleFilter);
-    if (normalizedRole != null) {
+    final normalizedRoles = _roleValuesForFilter(roleFilter);
+    if (normalizedRoles.length == 1) {
       query = _users
-          .where('role', isEqualTo: normalizedRole)
+          .where('role', isEqualTo: normalizedRoles.single)
+          .orderBy('createdAt', descending: true);
+    } else if (normalizedRoles.length > 1) {
+      query = _users
+          .where('role', whereIn: normalizedRoles)
           .orderBy('createdAt', descending: true);
     }
 
@@ -93,23 +97,23 @@ class AppUserService {
     );
   }
 
-  static String? _roleValueForFilter(String? roleLabel) {
+  static List<String> _roleValuesForFilter(String? roleLabel) {
     switch (roleLabel?.trim().toLowerCase()) {
       case 'super user':
-        return 'super_user';
+        return ['super_user'];
       case 'officer':
-        return 'officer';
+        return ['officer'];
       case 'driver':
-        return 'driver';
+        return ['driver'];
       case 'accounts':
       case 'account':
-        return 'accounts';
+        return ['accounts'];
       case 'management':
-        return 'management';
+        return ['management'];
       case 'manager':
-        return 'manager';
+        return ['manager', 'manager_officer'];
       default:
-        return null;
+        return const [];
     }
   }
 
@@ -144,6 +148,8 @@ class AppUserService {
       case 'management':
         return 'management';
       case 'manager':
+      case 'manager_officer':
+      case 'manager/officer':
         return 'managers';
       case 'super_user':
       case 'super user':
