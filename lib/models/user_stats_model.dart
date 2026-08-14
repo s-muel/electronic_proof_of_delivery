@@ -82,6 +82,8 @@ class UserStatsModel {
           management++;
           break;
         case 'manager':
+        case 'manager_officer':
+        case 'manager/officer':
           managers++;
           break;
         case 'super_user':

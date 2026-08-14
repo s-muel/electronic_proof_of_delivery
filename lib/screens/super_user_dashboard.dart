@@ -423,6 +423,10 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                               child: Text('Manager'),
                             ),
                             DropdownMenuItem(
+                              value: 'manager_officer',
+                              child: Text('Manager/Officer'),
+                            ),
+                            DropdownMenuItem(
                               value: 'super_user',
                               child: Text('Super User'),
                             ),
@@ -2900,6 +2904,8 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
       case 'management':
         return 'Management';
       case 'manager':
+      case 'manager_officer':
+      case 'manager/officer':
         return 'Manager';
       case 'super_user':
       case 'super user':

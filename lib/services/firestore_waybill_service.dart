@@ -399,6 +399,7 @@ class FirestoreWaybillService {
     required int limit,
     DocumentSnapshot<Map<String, dynamic>>? startAfterDocument,
     String? statusFilter,
+    String? invoiceStatusFilter,
     bool rejectedOnly = false,
     bool includeDeleted = false,
   }) async {
@@ -409,6 +410,11 @@ class FirestoreWaybillService {
     final trimmedStatus = statusFilter?.trim() ?? '';
     if (trimmedStatus.isNotEmpty) {
       query = query.where('status', isEqualTo: trimmedStatus);
+    }
+
+    final trimmedInvoiceStatus = invoiceStatusFilter?.trim() ?? '';
+    if (trimmedInvoiceStatus.isNotEmpty) {
+      query = query.where('invoiceStatus', isEqualTo: trimmedInvoiceStatus);
     }
 
     if (rejectedOnly) {

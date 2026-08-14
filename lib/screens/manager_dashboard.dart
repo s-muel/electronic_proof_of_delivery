@@ -7,6 +7,7 @@ import '../services/firebase_auth_service.dart';
 import '../services/firestore_waybill_service.dart';
 import '../services/waybill_service.dart';
 import '../utils/platform_flags.dart';
+import 'create_waybill_screen.dart';
 import 'login_screen.dart';
 import 'waybill_details_screen.dart';
 
@@ -20,7 +21,9 @@ class ManagerDashboard extends StatefulWidget {
 class _ManagerDashboardState extends State<ManagerDashboard> {
   List<WaybillModel> waybills = [];
   WaybillStatsModel? dashboardStats;
+  WaybillStatsModel? myWaybillStats;
   String managerName = '';
+  String managerUserId = '';
   String? openingCardKey;
 
   int get _totalCount => dashboardStats?.total ?? waybills.length;
@@ -51,12 +54,15 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
 
   Future<void> loadDashboard() async {
     final firebaseUser = FirebaseAuthService.currentFirebaseUser;
+    final currentUserId = firebaseUser?.uid ?? '';
     var loadedManagerName =
         firebaseUser?.displayName ?? firebaseUser?.email ?? '';
+    var loadedManagerUserId = currentUserId;
 
     try {
       final profile = await FirebaseAuthService.getCurrentUserProfile();
       loadedManagerName = profile?.fullName ?? loadedManagerName;
+      loadedManagerUserId = profile?.userId ?? loadedManagerUserId;
     } catch (_) {
       // Keep the dashboard usable even if the profile refresh fails.
     }
@@ -64,6 +70,11 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
     if (shouldUseFirestoreData) {
       try {
         dashboardStats = await FirestoreWaybillService.getWaybillStats();
+        if (loadedManagerUserId.trim().isNotEmpty) {
+          myWaybillStats = await FirestoreWaybillService.getUserWaybillStats(
+            loadedManagerUserId,
+          );
+        }
       } catch (error) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -77,8 +88,20 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
 
     setState(() {
       managerName = loadedManagerName;
+      managerUserId = loadedManagerUserId;
       waybills = WaybillService.getAllWaybills();
     });
+  }
+
+  Future<void> _openCreateWaybill() async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(builder: (_) => const CreateWaybillScreen()),
+    );
+
+    if (mounted) {
+      await loadDashboard();
+    }
   }
 
   Future<void> _logout() async {
@@ -99,6 +122,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
     String? serverStatusFilter,
     String? serverInvoiceStatusFilter,
     String? serverExceptionFilter,
+    String? serverCreatedByUserId,
   }) async {
     if (openingCardKey != null) return;
 
@@ -113,7 +137,10 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
         builder: (_) => ManagerWaybillListScreen(
           title: title,
           waybills: selectedWaybills,
+          serverStatusFilter: serverStatusFilter,
+          serverInvoiceStatusFilter: serverInvoiceStatusFilter,
           serverExceptionFilter: serverExceptionFilter,
+          serverCreatedByUserId: serverCreatedByUserId,
         ),
       ),
     );
@@ -174,18 +201,88 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
     final isTablet = screenWidth >= 600 && !isWideScreen;
     final summaryColumns = isWideScreen ? 6 : (isTablet ? 2 : 1);
     final summaryAspectRatio = isWideScreen ? 1.85 : (isTablet ? 2.35 : 3.6);
+    final effectiveMyStats = myWaybillStats ?? WaybillStatsModel.empty();
 
     final dashboardContent = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _ManagerHero(
           managerName: managerName,
-          totalCount: _totalCount,
-          deliveredCount: _deliveredCount,
-          sentCount: _sentForInvoicingCount,
-          issueCount: _rejectedCount,
+          totalCount: effectiveMyStats.total,
+          deliveredCount: effectiveMyStats.readyForInvoice,
+          sentCount: effectiveMyStats.sentForInvoicing,
+          issueCount: effectiveMyStats.rejected,
         ),
         const SizedBox(height: 16),
+        Row(
+          children: [
+            FilledButton.icon(
+              onPressed: _openCreateWaybill,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Create Waybill'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: summaryColumns,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: summaryAspectRatio,
+          children: [
+            _MetricCard(
+              title: 'My Total',
+              value: effectiveMyStats.total,
+              icon: Icons.assignment,
+              color: Colors.indigo,
+              isLoading: openingCardKey == 'myTotal',
+              onTap: _openMyWaybills,
+            ),
+            _MetricCard(
+              title: 'My Pending',
+              value: effectiveMyStats.pendingDelivery,
+              icon: Icons.pending_actions,
+              color: Colors.orange,
+              isLoading: openingCardKey == 'myPending',
+              onTap: _openMyPendingWaybills,
+            ),
+            _MetricCard(
+              title: 'My Delivered',
+              value: effectiveMyStats.readyForInvoice,
+              icon: Icons.local_shipping,
+              color: Colors.blue,
+              isLoading: openingCardKey == 'myDelivered',
+              onTap: _openMyDeliveredWaybills,
+            ),
+            _MetricCard(
+              title: 'My Sent',
+              value: effectiveMyStats.sentForInvoicing,
+              icon: Icons.outbox_rounded,
+              color: Colors.deepPurple,
+              isLoading: openingCardKey == 'mySent',
+              onTap: _openMySentWaybills,
+            ),
+            _MetricCard(
+              title: 'My Invoiced',
+              value: effectiveMyStats.invoiced,
+              icon: Icons.done_all,
+              color: Colors.green,
+              isLoading: openingCardKey == 'myInvoiced',
+              onTap: _openMyInvoicedWaybills,
+            ),
+            _MetricCard(
+              title: 'My Rejected',
+              value: effectiveMyStats.rejected,
+              icon: Icons.report_problem,
+              color: Colors.red,
+              isLoading: openingCardKey == 'myRejected',
+              onTap: _openMyRejectedWaybills,
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -209,59 +306,44 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
           ],
         ),
         const SizedBox(height: 12),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: summaryColumns,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: summaryAspectRatio,
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
-            _MetricCard(
-              title: 'Total Waybills',
+            _CompanySummaryPill(
+              label: 'Total Waybills',
               value: _totalCount,
-              icon: Icons.inventory_2,
-              color: Colors.indigo,
+              isEmphasized: true,
               isLoading: openingCardKey == 'total',
               onTap: _openAllWaybills,
             ),
-            _MetricCard(
-              title: 'Pending',
+            _CompanySummaryPill(
+              label: 'Pending',
               value: _pendingCount,
-              icon: Icons.pending_actions,
-              color: Colors.orange,
               isLoading: openingCardKey == 'pending',
               onTap: _openPendingWaybills,
             ),
-            _MetricCard(
-              title: 'Delivered',
+            _CompanySummaryPill(
+              label: 'Delivered',
               value: _deliveredCount,
-              icon: Icons.local_shipping,
-              color: Colors.blue,
               isLoading: openingCardKey == 'delivered',
               onTap: _openDeliveredWaybills,
             ),
-            _MetricCard(
-              title: 'Sent for Invoicing',
+            _CompanySummaryPill(
+              label: 'Sent',
               value: _sentForInvoicingCount,
-              icon: Icons.outbox_rounded,
-              color: Colors.deepPurple,
               isLoading: openingCardKey == 'sent',
               onTap: _openSentForInvoicingWaybills,
             ),
-            _MetricCard(
-              title: 'Invoiced',
+            _CompanySummaryPill(
+              label: 'Invoiced',
               value: _invoicedCount,
-              icon: Icons.done_all,
-              color: Colors.green,
               isLoading: openingCardKey == 'invoiced',
               onTap: _openInvoicedWaybills,
             ),
-            _MetricCard(
-              title: 'Rejected',
+            _CompanySummaryPill(
+              label: 'Rejected',
               value: _rejectedCount,
-              icon: Icons.report_problem,
-              color: Colors.red,
               isLoading: openingCardKey == 'issues',
               onTap: _openRejectedWaybills,
             ),
@@ -387,33 +469,33 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
               ),
               _SidebarItem(
                 icon: Icons.inventory_2,
-                label: 'All Waybills',
-                onTap: _openAllWaybills,
+                label: 'My Waybills',
+                onTap: _openMyWaybills,
               ),
               _SidebarItem(
                 icon: Icons.pending_actions,
-                label: 'Pending',
-                onTap: _openPendingWaybills,
+                label: 'My Pending',
+                onTap: _openMyPendingWaybills,
               ),
               _SidebarItem(
                 icon: Icons.local_shipping,
-                label: 'Delivered',
-                onTap: _openDeliveredWaybills,
+                label: 'My Delivered',
+                onTap: _openMyDeliveredWaybills,
               ),
               _SidebarItem(
                 icon: Icons.done_all,
-                label: 'Invoiced',
-                onTap: _openInvoicedWaybills,
+                label: 'My Invoiced',
+                onTap: _openMyInvoicedWaybills,
               ),
               _SidebarItem(
                 icon: Icons.outbox_rounded,
-                label: 'Sent for Invoicing',
-                onTap: _openSentForInvoicingWaybills,
+                label: 'My Sent',
+                onTap: _openMySentWaybills,
               ),
               _SidebarItem(
                 icon: Icons.report_problem,
-                label: 'Rejected',
-                onTap: _openRejectedWaybills,
+                label: 'My Rejected',
+                onTap: _openMyRejectedWaybills,
               ),
               const Spacer(),
               Container(
@@ -513,6 +595,91 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
       serverInvoiceStatusFilter: WaybillService.invoiceRejectedStatus,
     );
   }
+
+  List<WaybillModel> _myCreatedWaybills({
+    String? statusFilter,
+    String? invoiceStatusFilter,
+  }) {
+    return WaybillService.getWaybillsCreatedBy(managerUserId).where((waybill) {
+      if (statusFilter != null && waybill.status != statusFilter) return false;
+      if (invoiceStatusFilter != null &&
+          waybill.invoiceStatus != invoiceStatusFilter) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  void _openMyWaybills() {
+    _openWaybillList(
+      title: 'My Created Waybills',
+      selectedWaybills: _myCreatedWaybills(),
+      cardKey: 'myTotal',
+      serverCreatedByUserId: managerUserId,
+    );
+  }
+
+  void _openMyPendingWaybills() {
+    _openWaybillList(
+      title: 'My Pending Waybills',
+      selectedWaybills: _myCreatedWaybills(
+        statusFilter: WaybillService.pendingDeliveryStatus,
+      ),
+      cardKey: 'myPending',
+      serverCreatedByUserId: managerUserId,
+      serverStatusFilter: WaybillService.pendingDeliveryStatus,
+    );
+  }
+
+  void _openMyDeliveredWaybills() {
+    _openWaybillList(
+      title: 'My Delivered Waybills',
+      selectedWaybills: _myCreatedWaybills(
+        statusFilter: WaybillService.deliveredStatus,
+        invoiceStatusFilter: WaybillService.invoiceNotSentStatus,
+      ),
+      cardKey: 'myDelivered',
+      serverCreatedByUserId: managerUserId,
+      serverStatusFilter: WaybillService.deliveredStatus,
+      serverInvoiceStatusFilter: WaybillService.invoiceNotSentStatus,
+    );
+  }
+
+  void _openMySentWaybills() {
+    _openWaybillList(
+      title: 'My Sent for Invoicing',
+      selectedWaybills: _myCreatedWaybills(
+        invoiceStatusFilter: WaybillService.invoiceSentStatus,
+      ),
+      cardKey: 'mySent',
+      serverCreatedByUserId: managerUserId,
+      serverInvoiceStatusFilter: WaybillService.invoiceSentStatus,
+    );
+  }
+
+  void _openMyInvoicedWaybills() {
+    _openWaybillList(
+      title: 'My Invoiced Waybills',
+      selectedWaybills: _myCreatedWaybills(
+        statusFilter: WaybillService.invoicedStatus,
+      ),
+      cardKey: 'myInvoiced',
+      serverCreatedByUserId: managerUserId,
+      serverStatusFilter: WaybillService.invoicedStatus,
+    );
+  }
+
+  void _openMyRejectedWaybills() {
+    _openWaybillList(
+      title: 'My Rejected Waybills',
+      selectedWaybills: _myCreatedWaybills(
+        invoiceStatusFilter: WaybillService.invoiceRejectedStatus,
+      ),
+      cardKey: 'myRejected',
+      serverCreatedByUserId: managerUserId,
+      serverInvoiceStatusFilter: WaybillService.invoiceRejectedStatus,
+    );
+  }
 }
 
 class _SidebarItem extends StatelessWidget {
@@ -585,6 +752,7 @@ class ManagerWaybillListScreen extends StatefulWidget {
   final String? serverStatusFilter;
   final String? serverInvoiceStatusFilter;
   final String? serverExceptionFilter;
+  final String? serverCreatedByUserId;
 
   const ManagerWaybillListScreen({
     super.key,
@@ -593,6 +761,7 @@ class ManagerWaybillListScreen extends StatefulWidget {
     this.serverStatusFilter,
     this.serverInvoiceStatusFilter,
     this.serverExceptionFilter,
+    this.serverCreatedByUserId,
   });
 
   @override
@@ -619,6 +788,7 @@ class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
 
   bool get usesServerPagination =>
       isAllWaybillList ||
+      widget.serverCreatedByUserId != null ||
       widget.serverStatusFilter != null ||
       widget.serverInvoiceStatusFilter != null ||
       widget.serverExceptionFilter != null;
@@ -735,6 +905,10 @@ class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
       return stats.pendingDelivery;
     }
     if (widget.serverStatusFilter == WaybillService.deliveredStatus) {
+      if (widget.serverInvoiceStatusFilter ==
+          WaybillService.invoiceNotSentStatus) {
+        return stats.readyForInvoice;
+      }
       return stats.delivered;
     }
     if (widget.serverStatusFilter == WaybillService.invoicedStatus) {
@@ -765,27 +939,44 @@ class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
 
   List<WaybillModel> _cachedFallbackWaybills() {
     final cachedWaybills = WaybillService.getAllWaybills();
+    final createdByUserId = widget.serverCreatedByUserId;
     final statusFilter = widget.serverStatusFilter;
     final invoiceStatusFilter = widget.serverInvoiceStatusFilter;
     final exceptionFilter = widget.serverExceptionFilter;
+    var sourceWaybills = cachedWaybills;
 
+    if (createdByUserId != null && createdByUserId.trim().isNotEmpty) {
+      sourceWaybills = sourceWaybills
+          .where((waybill) => waybill.createdByUserId == createdByUserId)
+          .toList();
+    }
+
+    if (statusFilter != null && invoiceStatusFilter != null) {
+      return sourceWaybills
+          .where(
+            (waybill) =>
+                waybill.status == statusFilter &&
+                waybill.invoiceStatus == invoiceStatusFilter,
+          )
+          .toList();
+    }
     if (statusFilter != null) {
-      return cachedWaybills
+      return sourceWaybills
           .where((waybill) => waybill.status == statusFilter)
           .toList();
     }
     if (invoiceStatusFilter != null) {
-      return cachedWaybills
+      return sourceWaybills
           .where((waybill) => waybill.invoiceStatus == invoiceStatusFilter)
           .toList();
     }
     if (exceptionFilter != null) {
-      return cachedWaybills
+      return sourceWaybills
           .where((waybill) => _matchesExceptionFilter(waybill, exceptionFilter))
           .toList();
     }
 
-    return cachedWaybills;
+    return sourceWaybills;
   }
 
   bool _matchesExceptionFilter(WaybillModel waybill, String exceptionFilter) {
@@ -828,7 +1019,17 @@ class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
     setState(() => _isLoadingPage = true);
 
     try {
-      final page = widget.serverStatusFilter != null
+      final page =
+          widget.serverCreatedByUserId != null &&
+              widget.serverCreatedByUserId!.trim().isNotEmpty
+          ? await FirestoreWaybillService.getWaybillsCreatedByPage(
+              widget.serverCreatedByUserId!,
+              limit: _itemsPerPage,
+              startAfterDocument: _pageCursors[pageIndex],
+              statusFilter: widget.serverStatusFilter,
+              invoiceStatusFilter: widget.serverInvoiceStatusFilter,
+            )
+          : widget.serverStatusFilter != null
           ? await FirestoreWaybillService.getWaybillsByStatusPage(
               widget.serverStatusFilter!,
               limit: _itemsPerPage,
@@ -864,7 +1065,13 @@ class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
       _usingLocalCache = false;
       _localTotalItems = 0;
       if (_serverTotalWaybills == null) {
-        final stats = await FirestoreWaybillService.getWaybillStats();
+        final stats =
+            widget.serverCreatedByUserId != null &&
+                widget.serverCreatedByUserId!.trim().isNotEmpty
+            ? await FirestoreWaybillService.getUserWaybillStats(
+                widget.serverCreatedByUserId!,
+              )
+            : await FirestoreWaybillService.getWaybillStats();
         _serverTotalWaybills = _totalFromStats(stats);
       }
     } catch (error) {
@@ -1317,7 +1524,7 @@ class _ManagerHero extends StatelessWidget {
                     const SizedBox(height: 4),
                   ],
                   const Text(
-                    'Monitor company deliveries, invoice movement, and exceptions.',
+                    'Track your created waybills and company delivery progress.',
                     style: TextStyle(color: Color(0xFF5B718C)),
                   ),
                 ],
@@ -1403,6 +1610,83 @@ class _HeroPill extends StatelessWidget {
   }
 }
 
+class _CompanySummaryPill extends StatelessWidget {
+  final String label;
+  final int value;
+  final VoidCallback onTap;
+  final bool isEmphasized;
+  final bool isLoading;
+
+  const _CompanySummaryPill({
+    required this.label,
+    required this.value,
+    required this.onTap,
+    this.isEmphasized = false,
+    this.isLoading = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final valueColor = isEmphasized
+        ? const Color(0xFF0F5FB8)
+        : const Color(0xFF5B718C);
+    final labelColor = isEmphasized
+        ? const Color(0xFF274C77)
+        : const Color(0xFF5B718C);
+
+    return Material(
+      color: isEmphasized ? const Color(0xFFEAF3FF) : const Color(0xFFF6FAFF),
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: isLoading ? null : onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: isEmphasized
+                  ? const Color(0xFFBBD5F5)
+                  : const Color(0xFFDDE8F6),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              isLoading
+                  ? SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: valueColor,
+                      ),
+                    )
+                  : Text(
+                      value.toString(),
+                      style: TextStyle(
+                        color: valueColor,
+                        fontSize: isEmphasized ? 14 : 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  color: labelColor,
+                  fontSize: 12,
+                  fontWeight: isEmphasized ? FontWeight.w700 : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _MetricCard extends StatelessWidget {
   final String title;
   final int value;
@@ -1410,6 +1694,7 @@ class _MetricCard extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
   final bool isLoading;
+  final bool isCompact;
 
   const _MetricCard({
     required this.title,
@@ -1418,10 +1703,20 @@ class _MetricCard extends StatelessWidget {
     required this.color,
     required this.onTap,
     this.isLoading = false,
+    this.isCompact = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final padding = isCompact
+        ? const EdgeInsets.symmetric(horizontal: 9, vertical: 7)
+        : const EdgeInsets.symmetric(horizontal: 10, vertical: 8);
+    final iconBoxSize = isCompact ? 32.0 : 36.0;
+    final iconSize = isCompact ? 18.0 : 20.0;
+    final valueFontSize = isCompact ? 17.0 : 19.0;
+    final titleFontSize = isCompact ? 11.0 : 12.0;
+    final trailingIconSize = isCompact ? 20.0 : 24.0;
+
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(18),
@@ -1429,7 +1724,7 @@ class _MetricCard extends StatelessWidget {
         onTap: isLoading ? null : onTap,
         borderRadius: BorderRadius.circular(18),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          padding: padding,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: color.withValues(alpha: 0.22)),
@@ -1437,13 +1732,13 @@ class _MetricCard extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                width: 36,
-                height: 36,
+                width: iconBoxSize,
+                height: iconBoxSize,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(13),
                 ),
-                child: Icon(icon, color: color, size: 20),
+                child: Icon(icon, color: color, size: iconSize),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -1455,7 +1750,7 @@ class _MetricCard extends StatelessWidget {
                       value.toString(),
                       style: TextStyle(
                         color: color,
-                        fontSize: 19,
+                        fontSize: valueFontSize,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -1464,10 +1759,10 @@ class _MetricCard extends StatelessWidget {
                       title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
+                      style: TextStyle(
+                        fontSize: titleFontSize,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF172033),
+                        color: const Color(0xFF172033),
                       ),
                     ),
                   ],
@@ -1482,7 +1777,11 @@ class _MetricCard extends StatelessWidget {
                         color: color,
                       ),
                     )
-                  : Icon(Icons.chevron_right, color: color),
+                  : Icon(
+                      Icons.chevron_right,
+                      color: color,
+                      size: trailingIconSize,
+                    ),
             ],
           ),
         ),

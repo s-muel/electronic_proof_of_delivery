@@ -7,10 +7,7 @@ import 'package:signature/signature.dart';
 class SignatureCaptureScreen extends StatefulWidget {
   final String title;
 
-  const SignatureCaptureScreen({
-    super.key,
-    required this.title,
-  });
+  const SignatureCaptureScreen({super.key, required this.title});
 
   @override
   State<SignatureCaptureScreen> createState() => _SignatureCaptureScreenState();
@@ -41,9 +38,7 @@ class _SignatureCaptureScreenState extends State<SignatureCaptureScreen> {
   Future<void> saveSignature() async {
     if (_signatureController.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please sign before saving'),
-        ),
+        const SnackBar(content: Text('Please sign before saving')),
       );
       return;
     }
@@ -109,55 +104,55 @@ class _SignatureCaptureScreenState extends State<SignatureCaptureScreen> {
           TextButton.icon(
             onPressed: clearSignature,
             icon: const Icon(Icons.clear, color: Colors.red),
-            label: const Text(
-              'Clear',
-              style: TextStyle(color: Colors.red),
-            ),
+            label: const Text('Clear', style: TextStyle(color: Colors.red)),
           ),
           const SizedBox(width: 8),
         ],
       ),
-      body: Center(
-        child: Container(
-          width: isWideScreen ? 650 : double.infinity,
-          margin: const EdgeInsets.all(18),
-          child: Column(
-            children: [
-              const Text(
-                'Sign inside the box below',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+      body: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(18, 18, 18, 24),
+        child: Center(
+          child: SizedBox(
+            width: isWideScreen ? 650 : double.infinity,
+            child: Column(
+              children: [
+                const Text(
+                  'Sign inside the box below',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
-              ),
 
-              const SizedBox(height: 12),
+                const SizedBox(height: 12),
 
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.black, width: 1.5),
-                    color: Colors.white,
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.black, width: 1.5),
+                      color: Colors.white,
+                    ),
+                    child: Signature(
+                      controller: _signatureController,
+                      backgroundColor: Colors.white,
+                    ),
                   ),
-                  child: Signature(
-                    controller: _signatureController,
-                    backgroundColor: Colors.white,
+                ),
+
+                const SizedBox(height: 18),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: saveSignature,
+                    icon: const Icon(Icons.check),
+                    label: const Text('Save Signature'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F5FB8),
+                      foregroundColor: Colors.white,
+                    ),
                   ),
                 ),
-              ),
-
-              const SizedBox(height: 18),
-
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton.icon(
-                  onPressed: saveSignature,
-                  icon: const Icon(Icons.check),
-                  label: const Text('Save Signature'),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
