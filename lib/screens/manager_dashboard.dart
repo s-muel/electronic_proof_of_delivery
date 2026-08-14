@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../models/user_stats_model.dart';
 import '../models/waybill_model.dart';
 import '../models/waybill_stats_model.dart';
+import '../services/app_user_service.dart';
 import '../services/firebase_auth_service.dart';
 import '../services/firestore_waybill_service.dart';
 import '../services/waybill_service.dart';
@@ -22,6 +24,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
   List<WaybillModel> waybills = [];
   WaybillStatsModel? dashboardStats;
   WaybillStatsModel? myWaybillStats;
+  UserStatsModel? userStats;
   String managerName = '';
   String managerUserId = '';
   String? openingCardKey;
@@ -70,6 +73,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
     if (shouldUseFirestoreData) {
       try {
         dashboardStats = await FirestoreWaybillService.getWaybillStats();
+        userStats = await AppUserService.getUserStats();
         if (loadedManagerUserId.trim().isNotEmpty) {
           myWaybillStats = await FirestoreWaybillService.getUserWaybillStats(
             loadedManagerUserId,
@@ -202,6 +206,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
     final summaryColumns = isWideScreen ? 6 : (isTablet ? 2 : 1);
     final summaryAspectRatio = isWideScreen ? 1.85 : (isTablet ? 2.35 : 3.6);
     final effectiveMyStats = myWaybillStats ?? WaybillStatsModel.empty();
+    final effectiveUserStats = userStats ?? UserStatsModel.empty();
 
     final dashboardContent = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -212,6 +217,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
           deliveredCount: effectiveMyStats.readyForInvoice,
           sentCount: effectiveMyStats.sentForInvoicing,
           issueCount: effectiveMyStats.rejected,
+          userStats: effectiveUserStats,
         ),
         const SizedBox(height: 16),
         Row(
@@ -1451,6 +1457,7 @@ class _ManagerHero extends StatelessWidget {
   final int deliveredCount;
   final int sentCount;
   final int issueCount;
+  final UserStatsModel userStats;
 
   const _ManagerHero({
     required this.managerName,
@@ -1458,6 +1465,7 @@ class _ManagerHero extends StatelessWidget {
     required this.deliveredCount,
     required this.sentCount,
     required this.issueCount,
+    required this.userStats,
   });
 
   @override
@@ -1531,31 +1539,110 @@ class _ManagerHero extends StatelessWidget {
               ),
             ],
           ),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              _HeroPill(
-                label: 'Total',
-                value: totalCount.toString(),
-                icon: Icons.inventory_2,
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _HeroPill(
+                    label: 'Total',
+                    value: totalCount.toString(),
+                    icon: Icons.inventory_2,
+                  ),
+                  _HeroPill(
+                    label: 'Delivered',
+                    value: deliveredCount.toString(),
+                    icon: Icons.local_shipping,
+                  ),
+                  _HeroPill(
+                    label: 'Sent',
+                    value: sentCount.toString(),
+                    icon: Icons.outbox_rounded,
+                  ),
+                  _HeroPill(
+                    label: 'Rejected',
+                    value: issueCount.toString(),
+                    icon: Icons.report_problem,
+                  ),
+                ],
               ),
-              _HeroPill(
-                label: 'Delivered',
-                value: deliveredCount.toString(),
-                icon: Icons.local_shipping,
-              ),
-              _HeroPill(
-                label: 'Sent',
-                value: sentCount.toString(),
-                icon: Icons.outbox_rounded,
-              ),
-              _HeroPill(
-                label: 'Rejected',
-                value: issueCount.toString(),
-                icon: Icons.report_problem,
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _UserHeroPill(
+                    label: 'Active Users',
+                    value: userStats.active,
+                    isEmphasized: true,
+                  ),
+                  const _UserHeroPill(label: 'Directors', value: 3),
+                  _UserHeroPill(label: 'Drivers', value: userStats.drivers),
+                  _UserHeroPill(label: 'Officers', value: userStats.officers),
+                  _UserHeroPill(
+                    label: 'Management',
+                    value: userStats.management,
+                  ),
+                  _UserHeroPill(label: 'Accounts', value: userStats.accounts),
+                ],
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UserHeroPill extends StatelessWidget {
+  final String label;
+  final int value;
+  final bool isEmphasized;
+
+  const _UserHeroPill({
+    required this.label,
+    required this.value,
+    this.isEmphasized = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isEmphasized ? const Color(0xFFEAF3FF) : const Color(0xFFF6FAFF),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: isEmphasized
+              ? const Color(0xFFBBD5F5)
+              : const Color(0xFFDDE8F6),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            value.toString(),
+            style: TextStyle(
+              color: isEmphasized
+                  ? const Color(0xFF0F5FB8)
+                  : const Color(0xFF5B718C),
+              fontSize: isEmphasized ? 14 : 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: isEmphasized
+                  ? const Color(0xFF274C77)
+                  : const Color(0xFF5B718C),
+              fontSize: 12,
+              fontWeight: isEmphasized ? FontWeight.w700 : FontWeight.w600,
+            ),
           ),
         ],
       ),
