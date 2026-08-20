@@ -456,35 +456,175 @@ class _DriverDashboardState extends State<DriverDashboard> {
 
   Widget _buildListView() {
     return ListView.builder(
+      padding: const EdgeInsets.only(top: 2, bottom: 12),
       itemCount: visibleWaybills.length,
       itemBuilder: (context, index) {
         final waybill = visibleWaybills[index];
         final originalIndex = WaybillService.getIndexByWaybillNumber(
           waybill.waybillNumber,
         );
+        final statusColor = getStatusColor(waybill.status);
+        final isPendingDelivery =
+            waybill.status == WaybillService.pendingDeliveryStatus;
 
         return Card(
-          child: ListTile(
-            leading: const Icon(Icons.local_shipping, color: Colors.blue),
-            title: Text('Waybill No: ${waybill.waybillNumber}'),
-            subtitle: Text(
-              'BAJ No: ${waybill.bajNumber}\nClient: ${waybill.shippingVendor}',
-            ),
-            trailing: Chip(
-              label: Text(waybill.status),
-              backgroundColor: getStatusColor(
-                waybill.status,
-              ).withValues(alpha: 0.15),
-              labelStyle: TextStyle(
-                color: getStatusColor(waybill.status),
-                fontWeight: FontWeight.bold,
+          margin: const EdgeInsets.only(bottom: 8),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+            side: const BorderSide(color: Color(0xFFDDE6F2)),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => openWaybillDetails(originalIndex, waybill),
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.receipt_long,
+                          color: Colors.blue,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 6,
+                              runSpacing: 4,
+                              children: [
+                                Text(
+                                  waybill.waybillNumber,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF172033),
+                                  ),
+                                ),
+                                _buildCardStatusChip(
+                                  waybill.status,
+                                  statusColor,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 5),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 5,
+                              children: [
+                                _buildCardInfoText('BAJ No', waybill.bajNumber),
+                                _buildCardInfoText(
+                                  'Client',
+                                  waybill.shippingVendor,
+                                ),
+                                _buildCardIconText(
+                                  Icons.calendar_today,
+                                  waybill.date,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                      ),
+                      onPressed: () =>
+                          openWaybillDetails(originalIndex, waybill),
+                      icon: Icon(
+                        isPendingDelivery ? Icons.task_alt : Icons.open_in_new,
+                        size: 16,
+                      ),
+                      label: Text(isPendingDelivery ? 'Pending' : 'Open'),
+                    ),
+                  ),
+                ],
               ),
             ),
-            isThreeLine: true,
-            onTap: () => openWaybillDetails(originalIndex, waybill),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildCardStatusChip(String status, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.13),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(
+          color: color,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.4,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardInfoText(String label, String value) {
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(color: Color(0xFF34465C), fontSize: 13),
+        children: [
+          TextSpan(text: '$label: '),
+          TextSpan(
+            text: value.isEmpty ? '-' : value,
+            style: const TextStyle(
+              color: Color(0xFF172033),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCardIconText(IconData icon, String text, {Color? color}) {
+    final effectiveColor = color ?? const Color(0xFF34465C);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: effectiveColor),
+        const SizedBox(width: 4),
+        Text(
+          text.isEmpty ? '-' : text,
+          style: TextStyle(
+            color: effectiveColor,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 
@@ -559,11 +699,12 @@ class _DriverSummaryCard extends StatelessWidget {
     final cardContent = LayoutBuilder(
       builder: (context, constraints) {
         final isCompact = constraints.maxWidth < 150;
-        final iconSize = isCompact ? 30.0 : 42.0;
+        final iconSize = isCompact ? 28.0 : 42.0;
+        final displayTitle = isCompact ? title.replaceFirst(' ', '\n') : title;
 
         return Container(
           padding: EdgeInsets.symmetric(
-            horizontal: isCompact ? 8 : 14,
+            horizontal: isCompact ? 6 : 14,
             vertical: isCompact ? 10 : 12,
           ),
           decoration: BoxDecoration(
@@ -582,7 +723,7 @@ class _DriverSummaryCard extends StatelessWidget {
                 ),
                 child: Icon(icon, color: color, size: isCompact ? 18 : 24),
               ),
-              SizedBox(width: isCompact ? 6 : 12),
+              SizedBox(width: isCompact ? 5 : 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -599,13 +740,15 @@ class _DriverSummaryCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      title,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
+                      displayTitle,
+                      maxLines: isCompact ? 2 : 1,
+                      overflow: TextOverflow.visible,
+                      softWrap: true,
                       style: TextStyle(
                         fontSize: isCompact ? 10 : 13,
                         fontWeight: FontWeight.w600,
                         color: Colors.black87,
+                        height: isCompact ? 1.05 : null,
                       ),
                     ),
                   ],

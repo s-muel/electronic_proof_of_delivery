@@ -111,10 +111,22 @@ class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
       ),
     );
 
-    if (result == true) {
+    if (result is WaybillModel) {
       setState(() {
-        currentWaybill = WaybillService.getAllWaybills()[widget.index];
+        currentWaybill = result;
       });
+    } else if (result == true) {
+      final cachedIndex = WaybillService.getIndexByWaybillNumber(
+        currentWaybill.waybillNumber,
+      );
+      if (cachedIndex != -1) {
+        final cachedWaybills = WaybillService.getAllWaybills();
+        if (cachedIndex >= 0 && cachedIndex < cachedWaybills.length) {
+          setState(() {
+            currentWaybill = cachedWaybills[cachedIndex];
+          });
+        }
+      }
     }
   }
 
@@ -122,113 +134,128 @@ class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
   Widget build(BuildContext context) {
     final bool canEdit = currentWaybill.status == 'Pending Delivery';
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF1F2937),
-        elevation: 0.5,
-        title: Text(
-          'Waybill ${currentWaybill.waybillNumber}',
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Share PDF',
-            onPressed: isSharingPdf ? null : sharePdf,
-            icon: isSharingPdf
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.share),
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pop(context, currentWaybill);
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF4F7FB),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          foregroundColor: const Color(0xFF1F2937),
+          elevation: 0.5,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.pop(context, currentWaybill),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: FilledButton.icon(
-              onPressed: isDownloadingPdf ? null : downloadPdf,
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF16A34A),
-                foregroundColor: Colors.white,
-              ),
-              icon: isDownloadingPdf
+          title: Text(
+            'Waybill ${currentWaybill.waybillNumber}',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          actions: [
+            IconButton(
+              tooltip: 'Share PDF',
+              onPressed: isSharingPdf ? null : sharePdf,
+              icon: isSharingPdf
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.picture_as_pdf, size: 18),
-              label: Text(isDownloadingPdf ? 'Preparing...' : 'Download PDF'),
+                  : const Icon(Icons.share),
             ),
-          ),
-          if (canEdit)
             Padding(
-              padding: const EdgeInsets.only(left: 8, top: 8, bottom: 8),
-              child: OutlinedButton.icon(
-                onPressed: editWaybill,
-                icon: const Icon(Icons.edit, size: 18),
-                label: const Text('Edit'),
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: FilledButton.icon(
+                onPressed: isDownloadingPdf ? null : downloadPdf,
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF16A34A),
+                  foregroundColor: Colors.white,
+                ),
+                icon: isDownloadingPdf
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.picture_as_pdf, size: 18),
+                label: Text(isDownloadingPdf ? 'Preparing...' : 'Download PDF'),
               ),
             ),
-          const SizedBox(width: 12),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1100),
-                child: _WaybillHeaderCard(waybill: currentWaybill),
+            if (canEdit)
+              Padding(
+                padding: const EdgeInsets.only(left: 8, top: 8, bottom: 8),
+                child: OutlinedButton.icon(
+                  onPressed: editWaybill,
+                  icon: const Icon(Icons.edit, size: 18),
+                  label: const Text('Edit'),
+                ),
               ),
-            ),
-            const SizedBox(height: 18),
-            if (_hasRejectionNote) ...[
+            const SizedBox(width: 12),
+          ],
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
               Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 1100),
-                  child: _RejectionNoteCard(
-                    reason: currentWaybill.invoiceRejectionReason,
-                  ),
+                  child: _WaybillHeaderCard(waybill: currentWaybill),
                 ),
               ),
               const SizedBox(height: 18),
-            ],
-            Center(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: const Color(0xFFDDE5EF)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.07),
-                      blurRadius: 22,
-                      offset: const Offset(0, 10),
+              if (_hasRejectionNote) ...[
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1100),
+                    child: _RejectionNoteCard(
+                      reason: currentWaybill.invoiceRejectionReason,
                     ),
-                  ],
+                  ),
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: WaybillTemplateWidget(
-                      waybill: currentWaybill,
-                      receiverSignatureBytes:
-                          currentWaybill.receiverSignatureBytes,
-                      driverSignatureBytes: currentWaybill.driverSignatureBytes,
-                      receiverStampBytes: currentWaybill.receiverStampBytes,
+                const SizedBox(height: 18),
+              ],
+              Center(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: const Color(0xFFDDE5EF)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.07),
+                        blurRadius: 22,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: FittedBox(
+                        alignment: Alignment.topCenter,
+                        fit: BoxFit.contain,
+                        child: WaybillTemplateWidget(
+                          waybill: currentWaybill,
+                          receiverSignatureBytes:
+                              currentWaybill.receiverSignatureBytes,
+                          driverSignatureBytes:
+                              currentWaybill.driverSignatureBytes,
+                          receiverStampBytes: currentWaybill.receiverStampBytes,
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

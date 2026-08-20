@@ -146,11 +146,13 @@ class _ManagementDashboardState extends State<ManagementDashboard> {
     );
   }
 
-  List<WaybillModel> get _pendingWaybills => waybills
-      .where(
-        (waybill) => waybill.status == WaybillService.pendingDeliveryStatus,
-      )
-      .toList();
+  List<WaybillModel> get _pendingWaybills =>
+      waybills
+          .where(
+            (waybill) => waybill.status == WaybillService.pendingDeliveryStatus,
+          )
+          .toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
   List<WaybillModel> get _deliveredWaybills => waybills
       .where(
@@ -453,6 +455,16 @@ class _ManagementDashboardState extends State<ManagementDashboard> {
                     ),
                     const SizedBox(height: 10),
                     TextButton.icon(
+                      onPressed: loadDashboard,
+                      icon: const Icon(Icons.refresh, size: 17),
+                      label: const Text('Refresh'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF0F5FB8),
+                        padding: EdgeInsets.zero,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    TextButton.icon(
                       onPressed: _logout,
                       icon: const Icon(Icons.logout, size: 17),
                       label: const Text('Logout'),
@@ -713,6 +725,24 @@ class _ManagementWaybillListScreenState
     super.dispose();
   }
 
+  Future<void> refreshWaybillList() async {
+    searchController.clear();
+    _pageCursors
+      ..clear()
+      ..add(null);
+    _loadedPageCache.clear();
+    _pageHasMoreCache.clear();
+    _serverTotalWaybills = null;
+    if (usesServerPagination) {
+      await loadWaybillPage(pageIndex: 0);
+    } else {
+      setState(() {
+        _currentPage = 0;
+        filteredWaybills = widget.waybills;
+      });
+    }
+  }
+
   void filterWaybills(String query) {
     final searchText = query.toLowerCase().trim();
 
@@ -797,7 +827,8 @@ class _ManagementWaybillListScreenState
     if (statusFilter != null) {
       return cachedWaybills
           .where((waybill) => waybill.status == statusFilter)
-          .toList();
+          .toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     }
     if (invoiceStatusFilter != null) {
       return cachedWaybills
@@ -955,12 +986,34 @@ class _ManagementWaybillListScreenState
     }
 
     if (!mounted) return;
-    await Navigator.push(
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => WaybillDetailsScreen(waybill: waybill, index: index),
       ),
     );
+
+    if (result is WaybillModel && mounted) {
+      setState(() {
+        _replaceWaybillInList(currentPageWaybills, result);
+        _replaceWaybillInList(filteredWaybills, result);
+        for (final cachedPage in _loadedPageCache.values) {
+          _replaceWaybillInList(cachedPage, result);
+        }
+      });
+    }
+  }
+
+  void _replaceWaybillInList(
+    List<WaybillModel> waybillList,
+    WaybillModel updatedWaybill,
+  ) {
+    final index = waybillList.indexWhere(
+      (waybill) => waybill.waybillNumber == updatedWaybill.waybillNumber,
+    );
+    if (index != -1) {
+      waybillList[index] = updatedWaybill;
+    }
   }
 
   @override
@@ -974,12 +1027,12 @@ class _ManagementWaybillListScreenState
         child: Column(
           children: [
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [Color(0xFFEAF3FF), Color(0xFFFFFFFF)],
                 ),
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: Colors.blue.withValues(alpha: 0.22)),
               ),
               child: Row(
@@ -988,8 +1041,9 @@ class _ManagementWaybillListScreenState
                     onPressed: () => Navigator.pop(context),
                     icon: const Icon(Icons.arrow_back),
                     tooltip: 'Back',
+                    visualDensity: VisualDensity.compact,
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -997,39 +1051,70 @@ class _ManagementWaybillListScreenState
                         Text(
                           widget.title,
                           style: const TextStyle(
-                            fontSize: 23,
+                            fontSize: 20,
                             fontWeight: FontWeight.bold,
                             color: Color(0xFF172033),
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 2),
                         Text(
                           _showingSummary,
-                          style: const TextStyle(color: Colors.black54),
+                          style: const TextStyle(
+                            color: Colors.black54,
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  FilledButton.tonalIcon(
+                    onPressed: _isLoadingPage ? null : refreshWaybillList,
+                    style: FilledButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                    ),
+                    icon: _isLoadingPage
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh, size: 16),
+                    label: Text(_isLoadingPage ? 'Refreshing' : 'Refresh'),
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             TextField(
               controller: searchController,
               decoration: InputDecoration(
+                isDense: true,
                 hintText:
                     'Search waybill, BAJ number, client, receiver or status',
                 prefixIcon: const Icon(Icons.search),
+                prefixIconConstraints: const BoxConstraints(
+                  minWidth: 38,
+                  minHeight: 38,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 filled: true,
                 fillColor: Colors.white,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(12),
                   borderSide: const BorderSide(color: Color(0xFFD0D7DE)),
                 ),
               ),
               onChanged: filterWaybills,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             Expanded(
               child: _isLoadingPage && filteredWaybills.isEmpty
                   ? const Center(
@@ -1219,10 +1304,10 @@ class _ManagementWaybillListScreenState
         : 'Showing $start-$end of ${filteredWaybills.length}';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFDDE8F6)),
       ),
       child: Row(
@@ -1232,12 +1317,15 @@ class _ManagementWaybillListScreenState
               _isLoadingPage ? 'Loading waybills...' : showingText,
               style: const TextStyle(
                 color: Color(0xFF5B718C),
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
           IconButton.filledTonal(
             tooltip: 'Previous page',
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints.tightFor(width: 36, height: 36),
             onPressed: _currentPage == 0 || _isLoadingPage
                 ? null
                 : usesServerPagination
@@ -1250,11 +1338,13 @@ class _ManagementWaybillListScreenState
             usesServerPagination
                 ? 'Page ${_currentPage + 1}'
                 : 'Page ${_currentPage + 1} of $totalPages',
-            style: const TextStyle(fontWeight: FontWeight.bold),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
           ),
           const SizedBox(width: 8),
           IconButton.filledTonal(
             tooltip: 'Next page',
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints.tightFor(width: 36, height: 36),
             onPressed:
                 _isLoadingPage ||
                     (usesServerPagination

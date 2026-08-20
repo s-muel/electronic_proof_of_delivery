@@ -797,6 +797,27 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
     super.dispose();
   }
 
+  Future<void> refreshWaybillList() async {
+    searchController.clear();
+    _pageCursors
+      ..clear()
+      ..add(null);
+    _loadedPageCache.clear();
+    _pageHasMoreCache.clear();
+    _readyForInvoiceServerCache = null;
+    _summaryStats = null;
+    _serverTotalWaybills = null;
+    if (_usesServerPagination) {
+      await loadWaybillPage(pageIndex: 0);
+    } else {
+      setState(() {
+        _currentPage = 0;
+        allWaybills = widget.waybills;
+        filteredWaybills = allWaybills;
+      });
+    }
+  }
+
   void filterWaybills(String query) {
     final searchText = query.toLowerCase().trim();
 
@@ -1393,22 +1414,22 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
       body: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [Color(0xFFEAF3FF), Color(0xFFFFFFFF)],
                 ),
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: pageColor.withValues(alpha: 0.22)),
               ),
               child: Wrap(
-                spacing: 16,
-                runSpacing: 16,
+                spacing: 10,
+                runSpacing: 8,
                 alignment: WrapAlignment.spaceBetween,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
@@ -1434,36 +1455,39 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 8),
                       Container(
-                        width: 52,
-                        height: 52,
+                        width: 42,
+                        height: 42,
                         decoration: BoxDecoration(
                           color: pageColor.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        child: Icon(pageIcon, color: pageColor, size: 30),
+                        child: Icon(pageIcon, color: pageColor, size: 24),
                       ),
-                      const SizedBox(width: 14),
+                      const SizedBox(width: 10),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             widget.title,
                             style: const TextStyle(
-                              fontSize: 23,
+                              fontSize: 20,
                               fontWeight: FontWeight.bold,
                               color: Color(0xFF172033),
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 2),
                           Text(
                             widget.showMarkInvoicedButton
                                 ? 'Delivered waybills waiting for invoice processing.'
                                 : widget.showFullSummary
                                 ? 'Summary of all waybills in the system.'
                                 : 'Waybills already marked as invoiced.',
-                            style: const TextStyle(color: Colors.black54),
+                            style: const TextStyle(
+                              color: Colors.black54,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
@@ -1472,69 +1496,96 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
                   Wrap(
                     spacing: 10,
                     runSpacing: 10,
-                    children: widget.showFullSummary
-                        ? [
-                            _AccountsSummaryPill(
-                              label: 'Total',
-                              value: totalWaybillCount.toString(),
-                              color: Colors.blue,
-                              icon: Icons.list_alt,
-                            ),
-                            _AccountsSummaryPill(
-                              label: 'Pending',
-                              value: pendingCount.toString(),
-                              color: Colors.orange,
-                              icon: Icons.schedule,
-                            ),
-                            _AccountsSummaryPill(
-                              label: 'Delivered',
-                              value: deliveredCount.toString(),
-                              color: Colors.green,
-                              icon: Icons.check_circle,
-                            ),
-                            _AccountsSummaryPill(
-                              label: 'Invoiced',
-                              value: displayInvoicedCount.toString(),
-                              color: Colors.blue,
-                              icon: Icons.receipt_long,
-                            ),
-                            _AccountsSummaryPill(
-                              label: 'Rejected',
-                              value: rejectedCount.toString(),
-                              color: Colors.red,
-                              icon: Icons.warning_amber_rounded,
-                            ),
-                          ]
-                        : [
-                            _AccountsSummaryPill(
-                              label: 'Showing',
-                              value: visibleWaybills.length.toString(),
-                              color: pageColor,
-                              icon: Icons.filter_list,
-                            ),
-                            if (widget.invoiceActionMode != 'rejected')
+                    children: [
+                      FilledButton.tonalIcon(
+                        onPressed: _isLoadingPage ? null : refreshWaybillList,
+                        style: FilledButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                        ),
+                        icon: _isLoadingPage
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.refresh, size: 16),
+                        label: Text(_isLoadingPage ? 'Refreshing' : 'Refresh'),
+                      ),
+                      ...(widget.showFullSummary
+                          ? [
                               _AccountsSummaryPill(
-                                label: secondarySummaryLabel,
-                                value: secondarySummaryValue.toString(),
-                                color: pageColor,
-                                icon: pageIcon,
+                                label: 'Total',
+                                value: totalWaybillCount.toString(),
+                                color: Colors.blue,
+                                icon: Icons.list_alt,
                               ),
-                          ],
+                              _AccountsSummaryPill(
+                                label: 'Pending',
+                                value: pendingCount.toString(),
+                                color: Colors.orange,
+                                icon: Icons.schedule,
+                              ),
+                              _AccountsSummaryPill(
+                                label: 'Delivered',
+                                value: deliveredCount.toString(),
+                                color: Colors.green,
+                                icon: Icons.check_circle,
+                              ),
+                              _AccountsSummaryPill(
+                                label: 'Invoiced',
+                                value: displayInvoicedCount.toString(),
+                                color: Colors.blue,
+                                icon: Icons.receipt_long,
+                              ),
+                              _AccountsSummaryPill(
+                                label: 'Rejected',
+                                value: rejectedCount.toString(),
+                                color: Colors.red,
+                                icon: Icons.warning_amber_rounded,
+                              ),
+                            ]
+                          : [
+                              _AccountsSummaryPill(
+                                label: 'Showing',
+                                value: visibleWaybills.length.toString(),
+                                color: pageColor,
+                                icon: Icons.filter_list,
+                              ),
+                              if (widget.invoiceActionMode != 'rejected')
+                                _AccountsSummaryPill(
+                                  label: secondarySummaryLabel,
+                                  value: secondarySummaryValue.toString(),
+                                  color: pageColor,
+                                  icon: pageIcon,
+                                ),
+                            ]),
+                    ],
                   ),
                 ],
               ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 900),
               child: TextField(
                 controller: searchController,
                 decoration: InputDecoration(
+                  isDense: true,
                   hintText:
                       'Search waybill, BAJ number, client, receiver or status',
                   prefixIcon: const Icon(Icons.search),
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 38,
+                    minHeight: 38,
+                  ),
                   suffixIcon: searchController.text.isEmpty
                       ? null
                       : IconButton(
@@ -1547,19 +1598,19 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
                   filled: true,
                   fillColor: Colors.white,
                   contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
+                    horizontal: 12,
+                    vertical: 10,
                   ),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: Color(0xFFD0D7DE)),
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: Color(0xFFD0D7DE)),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide(color: pageColor, width: 1.5),
                   ),
                 ),
@@ -2088,10 +2139,10 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
         : 'Showing $start-$end of ${filteredWaybills.length}';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFDDE8F6)),
       ),
       child: Row(
@@ -2101,12 +2152,15 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
               _isLoadingPage ? 'Loading waybills...' : showingText,
               style: const TextStyle(
                 color: Color(0xFF5B718C),
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
           IconButton.filledTonal(
             tooltip: 'Previous page',
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints.tightFor(width: 36, height: 36),
             onPressed: _currentPage == 0 || _isLoadingPage
                 ? null
                 : _usesServerPagination
@@ -2119,11 +2173,13 @@ class _AccountsWaybillListScreenState extends State<AccountsWaybillListScreen> {
             _usesServerPagination
                 ? 'Page ${_currentPage + 1}'
                 : 'Page ${_currentPage + 1} of $totalPages',
-            style: const TextStyle(fontWeight: FontWeight.bold),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
           ),
           const SizedBox(width: 8),
           IconButton.filledTonal(
             tooltip: 'Next page',
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints.tightFor(width: 36, height: 36),
             onPressed:
                 _isLoadingPage ||
                     (_usesServerPagination
