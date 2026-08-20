@@ -213,13 +213,20 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
       return;
     }
 
-    await Navigator.push(
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => WaybillDetailsScreen(waybill: waybill, index: index),
       ),
     );
 
+    if (result is WaybillModel) {
+      _replaceVisibleWaybill(result);
+    }
+
+    _loadedPageCache.remove(_currentPage);
+    _pageHasMoreCache.remove(_currentPage);
+    _summaryWaybills = null;
     await loadWaybills(pageIndex: _currentPage);
   }
 
@@ -371,6 +378,16 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
     });
   }
 
+  Future<void> refreshWaybillList() async {
+    _pageCursors
+      ..clear()
+      ..add(null);
+    _loadedPageCache.clear();
+    _pageHasMoreCache.clear();
+    _summaryWaybills = null;
+    await loadWaybills(pageIndex: 0);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -455,17 +472,17 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [Color(0xFFEAF3FF), Color(0xFFFFFFFF)],
                 ),
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: const Color(0xFFD7E7FB)),
               ),
               child: Wrap(
-                spacing: 16,
-                runSpacing: 16,
+                spacing: 10,
+                runSpacing: 8,
                 alignment: WrapAlignment.spaceBetween,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
@@ -494,38 +511,41 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 8),
                       Container(
-                        width: 52,
-                        height: 52,
+                        width: 42,
+                        height: 42,
                         decoration: BoxDecoration(
                           color: Colors.blue.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                         child: const Icon(
                           Icons.receipt_long,
                           color: Colors.blue,
-                          size: 30,
+                          size: 24,
                         ),
                       ),
-                      const SizedBox(width: 14),
+                      const SizedBox(width: 10),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             widget.title,
-                            style: TextStyle(
-                              fontSize: 23,
+                            style: const TextStyle(
+                              fontSize: 20,
                               fontWeight: FontWeight.bold,
                               color: Color(0xFF172033),
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 2),
                           Text(
                             isRejectedView
                                 ? 'Review rejected waybills and rejection notes.'
                                 : 'Search, open, and manage created waybills.',
-                            style: const TextStyle(color: Colors.black54),
+                            style: const TextStyle(
+                              color: Colors.black54,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
@@ -535,6 +555,26 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
                     spacing: 10,
                     runSpacing: 10,
                     children: [
+                      FilledButton.tonalIcon(
+                        onPressed: _isLoadingPage ? null : refreshWaybillList,
+                        style: FilledButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                        ),
+                        icon: _isLoadingPage
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.refresh, size: 16),
+                        label: Text(_isLoadingPage ? 'Refreshing' : 'Refresh'),
+                      ),
                       _SummaryPill(
                         label: 'Total',
                         value: totalCount.toString(),
@@ -577,16 +617,21 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
               ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 900),
               child: TextField(
                 controller: searchController,
                 decoration: InputDecoration(
+                  isDense: true,
                   hintText:
                       'Search waybill, BAJ number, client, receiver or status',
                   prefixIcon: const Icon(Icons.search),
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 38,
+                    minHeight: 38,
+                  ),
                   suffixIcon: searchController.text.isEmpty
                       ? null
                       : IconButton(
@@ -599,19 +644,19 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
                   filled: true,
                   fillColor: Colors.white,
                   contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
+                    horizontal: 12,
+                    vertical: 10,
                   ),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: Color(0xFFD0D7DE)),
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: Color(0xFFD0D7DE)),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(
                       color: Colors.blue,
                       width: 1.5,
@@ -622,7 +667,7 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
               ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
             Expanded(
               child: _isLoadingPage && filteredWaybills.isEmpty
@@ -924,10 +969,10 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
         : 'Showing $start-$end';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFDDE8F6)),
       ),
       child: Row(
@@ -937,12 +982,15 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
               _isLoadingPage ? 'Loading waybills...' : showingText,
               style: const TextStyle(
                 color: Color(0xFF5B718C),
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
           IconButton.filledTonal(
             tooltip: 'Previous page',
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints.tightFor(width: 36, height: 36),
             onPressed: _isLoadingPage || _currentPage == 0
                 ? null
                 : () => loadWaybills(pageIndex: _currentPage - 1),
@@ -951,11 +999,13 @@ class _ViewWaybillsScreenState extends State<ViewWaybillsScreen> {
           const SizedBox(width: 8),
           Text(
             'Page ${_currentPage + 1}',
-            style: const TextStyle(fontWeight: FontWeight.bold),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
           ),
           const SizedBox(width: 8),
           IconButton.filledTonal(
             tooltip: 'Next page',
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints.tightFor(width: 36, height: 36),
             onPressed: _isLoadingPage || !_hasNextPage
                 ? null
                 : () => loadWaybills(pageIndex: _currentPage + 1),

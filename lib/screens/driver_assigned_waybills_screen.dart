@@ -438,49 +438,89 @@ class _DriverAssignedWaybillsScreenState
             .length;
     final completedCount = totalCount - pendingCount;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFEAF3FF), Color(0xFFFFFFFF)],
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFD8E7FB)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: Colors.blue.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 520;
+        final iconSize = isCompact ? 30.0 : 36.0;
+        final titleStyle = TextStyle(
+          fontSize: isCompact ? 16 : 19,
+          fontWeight: FontWeight.bold,
+          height: 1.1,
+        );
+        final subtitleText = isCompact
+            ? '$pendingCount pending, $completedCount completed'
+            : '$pendingCount pending, $completedCount completed or synced';
+
+        return Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: isCompact ? 10 : 16,
+            vertical: isCompact ? 10 : 16,
+          ),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFEAF3FF), Color(0xFFFFFFFF)],
             ),
-            child: const Icon(Icons.local_shipping, color: Colors.blue),
+            borderRadius: BorderRadius.circular(isCompact ? 14 : 18),
+            border: Border.all(color: const Color(0xFFD8E7FB)),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'All waybills assigned to you',
-                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
+          child: Row(
+            children: [
+              Container(
+                width: iconSize,
+                height: iconSize,
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '$pendingCount pending, $completedCount completed or synced',
-                  style: const TextStyle(color: Colors.black54),
+                child: Icon(
+                  Icons.local_shipping,
+                  color: Colors.blue,
+                  size: isCompact ? 18 : 24,
                 ),
-              ],
-            ),
+              ),
+              SizedBox(width: isCompact ? 8 : 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'All waybills assigned to you',
+                      maxLines: isCompact ? 2 : 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: titleStyle,
+                    ),
+                    SizedBox(height: isCompact ? 2 : 4),
+                    Text(
+                      subtitleText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.black54,
+                        fontSize: isCompact ? 12 : 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: isCompact ? 8 : 10),
+              Chip(
+                visualDensity: VisualDensity.compact,
+                labelPadding: EdgeInsets.symmetric(
+                  horizontal: isCompact ? 4 : 8,
+                ),
+                avatar: Icon(Icons.assignment, size: isCompact ? 14 : 16),
+                label: Text(
+                  '$totalCount Total',
+                  style: TextStyle(
+                    fontSize: isCompact ? 12 : 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
           ),
-          Chip(
-            avatar: const Icon(Icons.assignment, size: 16),
-            label: Text('$totalCount Total'),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -492,8 +532,13 @@ class _DriverAssignedWaybillsScreenState
           controller: searchController,
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
+            isDense: true,
             hintText: 'Search waybill, BAJ number, client or status',
             prefixIcon: const Icon(Icons.search),
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 38,
+              minHeight: 38,
+            ),
             suffixIcon: searchController.text.isEmpty
                 ? null
                 : IconButton(
@@ -506,8 +551,8 @@ class _DriverAssignedWaybillsScreenState
             filled: true,
             fillColor: Colors.white,
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 14,
+              horizontal: 12,
+              vertical: 10,
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
@@ -538,7 +583,7 @@ class _DriverAssignedWaybillsScreenState
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             searchField,
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             _buildSummaryFilterPill(),
           ],
         );
@@ -555,56 +600,78 @@ class _DriverAssignedWaybillsScreenState
         ? assignedStats?.total ?? filteredWaybills.length
         : _countByStatus(selectedStatusFilter);
 
-    return PopupMenuButton<String>(
-      initialValue: selectedStatusFilter,
-      onSelected: (value) {
-        setState(() => selectedStatusFilter = value);
-        loadAssignedWaybills(resetPagination: true);
-      },
-      itemBuilder: (context) => [
-        _buildFilterMenuItem(
-          'All',
-          assignedStats?.total ?? assignedWaybills.length,
-        ),
-        _buildFilterMenuItem(
-          WaybillService.pendingDeliveryStatus,
-          pendingCount,
-        ),
-        _buildFilterMenuItem(WaybillService.deliveredStatus, deliveredCount),
-        _buildFilterMenuItem(WaybillService.invoicedStatus, invoicedCount),
-        _buildFilterMenuItem(_rejectedFilter, rejectedCount),
-      ],
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.blue.withValues(alpha: 0.09),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: Colors.blue.withValues(alpha: 0.28)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.filter_list, color: Colors.blue, size: 16),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                selectedStatusFilter == 'All'
-                    ? 'Pending $pendingCount | Delivered $deliveredCount | Invoiced $invoicedCount | Rejected $rejectedCount'
-                    : '$showingCount $selectedStatusFilter',
-                maxLines: 2,
-                softWrap: true,
-                overflow: TextOverflow.visible,
-                style: const TextStyle(
-                  color: Colors.blue,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 520;
+
+        return PopupMenuButton<String>(
+          initialValue: selectedStatusFilter,
+          onSelected: (value) {
+            setState(() => selectedStatusFilter = value);
+            loadAssignedWaybills(resetPagination: true);
+          },
+          itemBuilder: (context) => [
+            _buildFilterMenuItem(
+              'All',
+              assignedStats?.total ?? assignedWaybills.length,
             ),
-            const SizedBox(width: 8),
-            const Icon(Icons.keyboard_arrow_down, color: Colors.blue, size: 20),
+            _buildFilterMenuItem(
+              WaybillService.pendingDeliveryStatus,
+              pendingCount,
+            ),
+            _buildFilterMenuItem(
+              WaybillService.deliveredStatus,
+              deliveredCount,
+            ),
+            _buildFilterMenuItem(WaybillService.invoicedStatus, invoicedCount),
+            _buildFilterMenuItem(_rejectedFilter, rejectedCount),
           ],
-        ),
-      ),
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: isCompact ? 10 : 14,
+              vertical: isCompact ? 9 : 12,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.09),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: Colors.blue.withValues(alpha: 0.28)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.filter_list,
+                  color: Colors.blue,
+                  size: isCompact ? 14 : 16,
+                ),
+                SizedBox(width: isCompact ? 6 : 8),
+                Flexible(
+                  child: Text(
+                    selectedStatusFilter == 'All'
+                        ? 'Pending $pendingCount | Delivered $deliveredCount | Invoiced $invoicedCount | Rejected $rejectedCount'
+                        : '$showingCount $selectedStatusFilter',
+                    maxLines: 2,
+                    softWrap: true,
+                    overflow: TextOverflow.visible,
+                    style: TextStyle(
+                      color: Colors.blue,
+                      fontSize: isCompact ? 12 : 14,
+                      fontWeight: FontWeight.w700,
+                      height: isCompact ? 1.15 : null,
+                    ),
+                  ),
+                ),
+                SizedBox(width: isCompact ? 6 : 8),
+                Icon(
+                  Icons.keyboard_arrow_down,
+                  color: Colors.blue,
+                  size: isCompact ? 18 : 20,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

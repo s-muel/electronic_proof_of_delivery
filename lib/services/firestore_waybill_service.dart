@@ -505,10 +505,9 @@ class FirestoreWaybillService {
     DocumentSnapshot<Map<String, dynamic>>? startAfterDocument,
     bool includeDeleted = false,
   }) async {
-    Query<Map<String, dynamic>> query = _waybills.where(
-      'status',
-      isEqualTo: status,
-    );
+    Query<Map<String, dynamic>> query = _waybills
+        .where('status', isEqualTo: status)
+        .orderBy('createdAt', descending: true);
 
     if (startAfterDocument != null) {
       query = query.startAfterDocument(startAfterDocument);
@@ -540,7 +539,8 @@ class FirestoreWaybillService {
   }) async {
     Query<Map<String, dynamic>> query = _waybills
         .where('status', isEqualTo: status)
-        .where('invoiceStatus', isEqualTo: invoiceStatus);
+        .where('invoiceStatus', isEqualTo: invoiceStatus)
+        .orderBy('createdAt', descending: true);
 
     if (startAfterDocument != null) {
       query = query.startAfterDocument(startAfterDocument);
