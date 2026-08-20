@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 
 import '../models/waybill_model.dart';
 import '../models/waybill_stats_model.dart';
@@ -506,9 +505,10 @@ class FirestoreWaybillService {
     DocumentSnapshot<Map<String, dynamic>>? startAfterDocument,
     bool includeDeleted = false,
   }) async {
-    Query<Map<String, dynamic>> query = _waybills
-        .where('status', isEqualTo: status)
-        .orderBy('createdAt', descending: true);
+    Query<Map<String, dynamic>> query = _waybills.where(
+      'status',
+      isEqualTo: status,
+    );
 
     if (startAfterDocument != null) {
       query = query.startAfterDocument(startAfterDocument);
@@ -538,34 +538,15 @@ class FirestoreWaybillService {
     DocumentSnapshot<Map<String, dynamic>>? startAfterDocument,
     bool includeDeleted = false,
   }) async {
-    Query<Map<String, dynamic>> orderedQuery = _waybills
+    Query<Map<String, dynamic>> query = _waybills
         .where('status', isEqualTo: status)
-        .where('invoiceStatus', isEqualTo: invoiceStatus)
-        .orderBy('createdAt', descending: true);
+        .where('invoiceStatus', isEqualTo: invoiceStatus);
 
     if (startAfterDocument != null) {
-      orderedQuery = orderedQuery.startAfterDocument(startAfterDocument);
+      query = query.startAfterDocument(startAfterDocument);
     }
 
-    QuerySnapshot<Map<String, dynamic>> snapshot;
-    try {
-      snapshot = await orderedQuery.limit(limit + 1).get();
-    } on FirebaseException catch (error) {
-      debugPrint(
-        'WAYBILL STATUS/INVOICE ORDERED QUERY ERROR: ${error.code}. Retrying without createdAt ordering.',
-      );
-
-      Query<Map<String, dynamic>> fallbackQuery = _waybills
-          .where('status', isEqualTo: status)
-          .where('invoiceStatus', isEqualTo: invoiceStatus);
-
-      if (startAfterDocument != null) {
-        fallbackQuery = fallbackQuery.startAfterDocument(startAfterDocument);
-      }
-
-      snapshot = await fallbackQuery.limit(limit + 1).get();
-    }
-
+    final snapshot = await query.limit(limit + 1).get();
     final docs = snapshot.docs;
     final pageDocs = docs.take(limit).toList();
     final waybills =
