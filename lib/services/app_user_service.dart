@@ -108,6 +108,9 @@ class AppUserService {
       case 'accounts':
       case 'account':
         return ['accounts'];
+      case 'director':
+      case 'directors':
+        return ['management'];
       case 'management':
         return ['management'];
       case 'manager':
@@ -135,8 +138,10 @@ class AppUserService {
     return stats;
   }
 
-  static String? _statsFieldForRole(String role) {
-    switch (role.trim().toLowerCase()) {
+  static String? _statsFieldForUser(AppUserModel user) {
+    if (user.isDirector) return 'directors';
+
+    switch (user.role.trim().toLowerCase()) {
       case 'officer':
       case 'officer in charge':
         return 'officers';
@@ -177,7 +182,7 @@ class AppUserService {
 
     void applyUser(AppUserModel user, int direction) {
       add(user.isActive ? 'active' : 'inactive', direction);
-      final roleField = _statsFieldForRole(user.role);
+      final roleField = _statsFieldForUser(user);
       if (roleField != null) {
         add(roleField, direction);
       }
@@ -239,6 +244,7 @@ class AppUserService {
     required String password,
     required String role,
     String department = '',
+    bool isDirector = false,
   }) async {
     final secondaryAuth = await _getSecondaryAuth();
 
@@ -267,6 +273,7 @@ class AppUserService {
         department: department.trim(),
         tempPass: password,
         isActive: true,
+        isDirector: isDirector,
         createdAt: now,
         updatedAt: now,
       );

@@ -357,12 +357,14 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
         .whereType<String>()
         .toSet();
     var selectedRole = user.role.trim().toLowerCase();
+    var selectedIsDirector = user.isDirector;
 
     if (!allowedRoleValues.contains(selectedRole)) {
       selectedRole = 'officer';
+      selectedIsDirector = false;
     }
 
-    final newRole = await showDialog<String>(
+    final roleUpdate = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
@@ -387,10 +389,29 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                     items: roleOptions,
                     onChanged: (value) {
                       if (value != null) {
-                        setDialogState(() => selectedRole = value);
+                        setDialogState(() {
+                          selectedRole = value;
+                          if (selectedRole != 'management') {
+                            selectedIsDirector = false;
+                          }
+                        });
                       }
                     },
                   ),
+                  if (selectedRole == 'management') ...[
+                    const SizedBox(height: 12),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Director'),
+                      subtitle: const Text('List this user under Directors'),
+                      value: selectedIsDirector,
+                      onChanged: (value) {
+                        setDialogState(
+                          () => selectedIsDirector = value ?? false,
+                        );
+                      },
+                    ),
+                  ],
                 ],
               ),
               actions: [
@@ -399,9 +420,14 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                   child: const Text('Cancel'),
                 ),
                 FilledButton(
-                  onPressed: selectedRole == user.role.trim().toLowerCase()
+                  onPressed:
+                      selectedRole == user.role.trim().toLowerCase() &&
+                          selectedIsDirector == user.isDirector
                       ? null
-                      : () => Navigator.pop(dialogContext, selectedRole),
+                      : () => Navigator.pop(dialogContext, {
+                          'role': selectedRole,
+                          'isDirector': selectedIsDirector,
+                        }),
                   child: const Text('Save Role'),
                 ),
               ],
@@ -411,10 +437,17 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
       },
     );
 
-    if (newRole == null) return;
+    if (roleUpdate == null) return;
+
+    final newRole = (roleUpdate['role'] ?? user.role).toString();
+    final newIsDirector = roleUpdate['isDirector'] == true;
 
     await AppUserService.updateUser(
-      user.copyWith(role: newRole, updatedAt: DateTime.now().toIso8601String()),
+      user.copyWith(
+        role: newRole,
+        isDirector: newRole == 'management' && newIsDirector,
+        updatedAt: DateTime.now().toIso8601String(),
+      ),
     );
 
     await loadAdminData();
@@ -434,6 +467,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     final confirmPasswordController = TextEditingController();
     var selectedRole = 'officer';
     var selectedDepartment = 'Transport';
+    var isDirector = false;
     var isSaving = false;
     var obscurePassword = true;
     var obscureConfirmPassword = true;
@@ -519,10 +553,29 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                           ],
                           onChanged: (value) {
                             if (value != null) {
-                              setDialogState(() => selectedRole = value);
+                              setDialogState(() {
+                                selectedRole = value;
+                                if (selectedRole != 'management') {
+                                  isDirector = false;
+                                }
+                              });
                             }
                           },
                         ),
+                        if (selectedRole == 'management') ...[
+                          const SizedBox(height: 12),
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Director'),
+                            subtitle: const Text(
+                              'Show this management user under Directors on the Super User dashboard.',
+                            ),
+                            value: isDirector,
+                            onChanged: (value) {
+                              setDialogState(() => isDirector = value ?? false);
+                            },
+                          ),
+                        ],
                         if (selectedRole != 'management') ...[
                           const SizedBox(height: 12),
                           DropdownButtonFormField<String>(
@@ -653,6 +706,8 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                               department: selectedRole == 'management'
                                   ? ''
                                   : selectedDepartment,
+                              isDirector:
+                                  selectedRole == 'management' && isDirector,
                             );
 
                             if (!dialogContext.mounted) return;
@@ -707,7 +762,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
 
       final roleMatches =
           selectedUserRoleFilter == null ||
-          _roleLabel(createdUser.role) == selectedUserRoleFilter;
+          _userRoleLabel(createdUser) == selectedUserRoleFilter;
       if (!roleMatches) return;
 
       final updatedUsers = [createdUser, ...users];
@@ -737,7 +792,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     AppUserModel createdUser,
   ) {
     final stats = currentStats ?? UserStatsModel.fromUsers(users);
-    final roleLabel = _roleLabel(createdUser.role);
+    final roleLabel = _userRoleLabel(createdUser);
 
     return UserStatsModel(
       total: stats.total + 1,
@@ -746,6 +801,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
       officers: stats.officers + (roleLabel == 'Officer' ? 1 : 0),
       drivers: stats.drivers + (roleLabel == 'Driver' ? 1 : 0),
       accounts: stats.accounts + (roleLabel == 'Accounts' ? 1 : 0),
+      directors: stats.directors + (roleLabel == 'Director' ? 1 : 0),
       management: stats.management + (roleLabel == 'Management' ? 1 : 0),
       managers: stats.managers + (roleLabel == 'Manager' ? 1 : 0),
       superUsers: stats.superUsers + (roleLabel == 'Super User' ? 1 : 0),
@@ -1534,6 +1590,13 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
             color: Colors.red,
             onTap: () => _openFilteredUsers('Manager'),
           ),
+          _superSummaryCard(
+            title: 'Director',
+            value: users.directors.toString(),
+            icon: Icons.workspace_premium,
+            color: Colors.teal,
+            onTap: () => _openFilteredUsers('Director'),
+          ),
         ]),
       ],
     );
@@ -2072,12 +2135,12 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     final roleFilter = selectedUserRoleFilter;
     final sourceUsers = roleFilter == null
         ? users
-        : users.where((user) => _roleLabel(user.role) == roleFilter).toList();
+        : users.where((user) => _userRoleLabel(user) == roleFilter).toList();
     if (searchText.isEmpty) return sourceUsers;
 
     return sourceUsers.where((user) {
       final displayName = user.fullName.isEmpty ? user.email : user.fullName;
-      final roleLabel = _roleLabel(user.role);
+      final roleLabel = _userRoleLabel(user);
 
       return displayName.toLowerCase().contains(searchText) ||
           user.email.toLowerCase().contains(searchText) ||
@@ -2102,6 +2165,8 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
         return stats.drivers;
       case 'Accounts':
         return stats.accounts;
+      case 'Director':
+        return stats.directors;
       case 'Management':
         return stats.management;
       case 'Manager':
@@ -2122,6 +2187,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
       'Accounts',
       'Management',
       'Manager',
+      'Director',
     ];
 
     for (final role in roleOrder) {
@@ -2129,7 +2195,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     }
 
     for (final user in sourceUsers) {
-      final label = _roleLabel(user.role);
+      final label = _userRoleLabel(user);
       groupedUsers.putIfAbsent(label, () => []);
       groupedUsers[label]!.add(user);
     }
@@ -2442,6 +2508,8 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
         return Icons.local_shipping;
       case 'Accounts':
         return Icons.receipt_long;
+      case 'Director':
+        return Icons.workspace_premium;
       case 'Management':
         return Icons.insights;
       case 'Manager':
@@ -3006,6 +3074,10 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
       default:
         return role;
     }
+  }
+
+  String _userRoleLabel(AppUserModel user) {
+    return user.isDirector ? 'Director' : _roleLabel(user.role);
   }
 }
 

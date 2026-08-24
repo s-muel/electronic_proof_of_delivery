@@ -1,11 +1,13 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
+
 import '../models/waybill_model.dart';
+import '../services/pdf_service.dart';
+import '../services/waybill_service.dart';
 import '../widgets/waybill_template_widget.dart';
 import 'edit_waybill_screen.dart';
-import '../services/waybill_service.dart';
-
-import 'package:printing/printing.dart';
-import '../services/pdf_service.dart';
 
 class WaybillDetailsScreen extends StatefulWidget {
   final WaybillModel waybill;
@@ -220,44 +222,60 @@ class _WaybillDetailsScreenState extends State<WaybillDetailsScreen> {
                 ),
                 const SizedBox(height: 18),
               ],
-              Center(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: const Color(0xFFDDE5EF)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.07),
-                        blurRadius: 22,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: FittedBox(
-                        alignment: Alignment.topCenter,
-                        fit: BoxFit.contain,
-                        child: WaybillTemplateWidget(
-                          waybill: currentWaybill,
-                          receiverSignatureBytes:
-                              currentWaybill.receiverSignatureBytes,
-                          driverSignatureBytes:
-                              currentWaybill.driverSignatureBytes,
-                          receiverStampBytes: currentWaybill.receiverStampBytes,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+              _buildWaybillPreview(),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildWaybillPreview() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final previewMaxWidth = constraints.maxWidth >= 1200
+            ? 980.0
+            : (constraints.maxWidth >= 900 ? 920.0 : constraints.maxWidth);
+        final cardWidth = math.min(constraints.maxWidth, previewMaxWidth);
+        final previewPadding = constraints.maxWidth < 700 ? 10.0 : 14.0;
+
+        return Center(
+          child: SizedBox(
+            width: cardWidth,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFDDE5EF)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(previewPadding),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FittedBox(
+                    alignment: Alignment.topCenter,
+                    fit: BoxFit.contain,
+                    child: WaybillTemplateWidget(
+                      waybill: currentWaybill,
+                      receiverSignatureBytes:
+                          currentWaybill.receiverSignatureBytes,
+                      driverSignatureBytes: currentWaybill.driverSignatureBytes,
+                      receiverStampBytes: currentWaybill.receiverStampBytes,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

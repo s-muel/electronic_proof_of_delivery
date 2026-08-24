@@ -6,6 +6,7 @@ class AppUserModel {
   final String department;
   final String tempPass;
   final bool isActive;
+  final bool isDirector;
   final String createdAt;
   final String updatedAt;
 
@@ -17,6 +18,7 @@ class AppUserModel {
     this.department = '',
     this.tempPass = '',
     this.isActive = true,
+    this.isDirector = false,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -30,6 +32,7 @@ class AppUserModel {
       department: map['department'] ?? '',
       tempPass: map['tempPass'] ?? '',
       isActive: map['isActive'] ?? true,
+      isDirector: _boolFromValue(map['isDirector']),
       createdAt: map['createdAt'] ?? '',
       updatedAt: map['updatedAt'] ?? '',
     );
@@ -44,6 +47,7 @@ class AppUserModel {
       'department': department,
       'tempPass': tempPass,
       'isActive': isActive,
+      'isDirector': isDirector,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
     };
@@ -57,6 +61,7 @@ class AppUserModel {
     String? department,
     String? tempPass,
     bool? isActive,
+    bool? isDirector,
     String? createdAt,
     String? updatedAt,
   }) {
@@ -68,8 +73,15 @@ class AppUserModel {
       department: department ?? this.department,
       tempPass: tempPass ?? this.tempPass,
       isActive: isActive ?? this.isActive,
+      isDirector: isDirector ?? this.isDirector,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
+  }
+
+  static bool _boolFromValue(dynamic value) {
+    if (value is bool) return value;
+    if (value is String) return value.trim().toLowerCase() == 'true';
+    return false;
   }
 }

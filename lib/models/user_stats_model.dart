@@ -7,6 +7,7 @@ class UserStatsModel {
   final int officers;
   final int drivers;
   final int accounts;
+  final int directors;
   final int management;
   final int managers;
   final int superUsers;
@@ -19,6 +20,7 @@ class UserStatsModel {
     required this.officers,
     required this.drivers,
     required this.accounts,
+    required this.directors,
     required this.management,
     required this.managers,
     required this.superUsers,
@@ -33,6 +35,7 @@ class UserStatsModel {
       officers: 0,
       drivers: 0,
       accounts: 0,
+      directors: 0,
       management: 0,
       managers: 0,
       superUsers: 0,
@@ -48,6 +51,7 @@ class UserStatsModel {
       officers: (map['officers'] as num?)?.toInt() ?? 0,
       drivers: (map['drivers'] as num?)?.toInt() ?? 0,
       accounts: (map['accounts'] as num?)?.toInt() ?? 0,
+      directors: (map['directors'] as num?)?.toInt() ?? 0,
       management: (map['management'] as num?)?.toInt() ?? 0,
       managers: (map['managers'] as num?)?.toInt() ?? 0,
       superUsers: (map['superUsers'] as num?)?.toInt() ?? 0,
@@ -60,12 +64,18 @@ class UserStatsModel {
     var officers = 0;
     var drivers = 0;
     var accounts = 0;
+    var directors = 0;
     var management = 0;
     var managers = 0;
     var superUsers = 0;
 
     for (final user in users) {
       if (user.isActive) active++;
+
+      if (user.isDirector) {
+        directors++;
+        continue;
+      }
 
       switch (user.role.trim().toLowerCase()) {
         case 'officer':
@@ -102,6 +112,7 @@ class UserStatsModel {
       officers: officers,
       drivers: drivers,
       accounts: accounts,
+      directors: directors,
       management: management,
       managers: managers,
       superUsers: superUsers,
@@ -117,6 +128,7 @@ class UserStatsModel {
       'officers': officers,
       'drivers': drivers,
       'accounts': accounts,
+      'directors': directors,
       'management': management,
       'managers': managers,
       'superUsers': superUsers,
