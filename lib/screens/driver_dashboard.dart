@@ -528,8 +528,8 @@ class _DriverDashboardState extends State<DriverDashboard> {
                               children: [
                                 _buildCardInfoText('BAJ No', waybill.bajNumber),
                                 _buildCardInfoText(
-                                  'Client',
-                                  waybill.shippingVendor,
+                                  'Receiver',
+                                  waybill.consigneeReceiver,
                                 ),
                                 _buildCardIconText(
                                   Icons.calendar_today,
@@ -638,7 +638,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
           DataColumn(label: Text('Waybill No.')),
           DataColumn(label: Text('BAJ No.')),
           DataColumn(label: Text('Date')),
-          DataColumn(label: Text('Shipping/Vendor')),
+          DataColumn(label: Text('Receiver')),
           DataColumn(label: Text('Status')),
           DataColumn(label: Text('Action')),
         ],
@@ -652,7 +652,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
               DataCell(Text(waybill.waybillNumber)),
               DataCell(Text(waybill.bajNumber)),
               DataCell(Text(waybill.date)),
-              DataCell(Text(waybill.shippingVendor)),
+              DataCell(Text(waybill.consigneeReceiver)),
               DataCell(
                 Chip(
                   label: Text(waybill.status),
