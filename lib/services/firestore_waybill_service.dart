@@ -505,16 +505,26 @@ class FirestoreWaybillService {
     DocumentSnapshot<Map<String, dynamic>>? startAfterDocument,
     bool includeDeleted = false,
   }) async {
-    Query<Map<String, dynamic>> query = _waybills.where(
-      'status',
-      isEqualTo: status,
+    final baseQuery = _waybills.where('status', isEqualTo: status);
+    Query<Map<String, dynamic>> query = baseQuery.orderBy(
+      'createdAt',
+      descending: true,
     );
 
     if (startAfterDocument != null) {
       query = query.startAfterDocument(startAfterDocument);
     }
 
-    final snapshot = await query.limit(limit + 1).get();
+    QuerySnapshot<Map<String, dynamic>> snapshot;
+    try {
+      snapshot = await query.limit(limit + 1).get();
+    } on FirebaseException {
+      var fallbackQuery = baseQuery;
+      if (startAfterDocument != null) {
+        fallbackQuery = fallbackQuery.startAfterDocument(startAfterDocument);
+      }
+      snapshot = await fallbackQuery.limit(limit + 1).get();
+    }
     final docs = snapshot.docs;
     final pageDocs = docs.take(limit).toList();
     final waybills =

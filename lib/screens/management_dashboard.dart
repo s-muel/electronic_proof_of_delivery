@@ -198,6 +198,7 @@ class _ManagementDashboardState extends State<ManagementDashboard> {
           sentCount: _sentForInvoicingCount,
           issueCount: _rejectedCount,
           userStats: effectiveUserStats,
+          onLogout: _logout,
         ),
         const SizedBox(height: 16),
         Row(
@@ -708,6 +709,23 @@ class _ManagementWaybillListScreenState
     return waybill.status;
   }
 
+  bool get _showsDeliveredDate =>
+      widget.serverStatusFilter == WaybillService.deliveredStatus ||
+      widget.title.toLowerCase().contains('delivered');
+
+  String _formatDateTime(String value) {
+    if (value.isEmpty) return '-';
+
+    final dateTime = DateTime.tryParse(value);
+    if (dateTime == null) return value;
+
+    final month = dateTime.month.toString().padLeft(2, '0');
+    final day = dateTime.day.toString().padLeft(2, '0');
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    return '${dateTime.year}-$month-$day $hour:$minute';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1157,30 +1175,168 @@ class _ManagementWaybillListScreenState
       itemBuilder: (context, index) {
         final waybill = pageWaybills[index];
 
-        return Card(
-          elevation: 0,
-          margin: const EdgeInsets.only(bottom: 12),
-          color: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-            side: const BorderSide(color: Color(0xFFE1E8F0)),
-          ),
-          child: ListTile(
-            onTap: () => openWaybill(waybill),
-            leading: const CircleAvatar(child: Icon(Icons.receipt_long)),
-            title: Text(
-              waybill.waybillNumber,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Text(
-              'BAJ: ${waybill.bajNumber}\nClient: ${waybill.consigneeReceiver}\nStatus: ${_displayStatusFor(waybill)}',
-            ),
-            isThreeLine: true,
-            trailing: const Icon(Icons.chevron_right),
-          ),
-        );
+        return _buildCompactWaybillCard(waybill);
       },
     );
+  }
+
+  Widget _buildCompactWaybillCard(WaybillModel waybill) {
+    final status = _displayStatusFor(waybill);
+    final statusColor = _statusColorFor(status);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: const Color(0xFFFCF9FF),
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: () => openWaybill(waybill),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE1D8F4)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEAF3FF),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.receipt_long,
+                        color: Color(0xFF2196F3),
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: [
+                              Text(
+                                waybill.waybillNumber,
+                                style: const TextStyle(
+                                  color: Color(0xFF172033),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              _buildCompactStatusPill(status, statusColor),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 6,
+                            children: [
+                              _buildCompactText('BAJ No', waybill.bajNumber),
+                              _buildCompactText(
+                                'Receiver',
+                                waybill.consigneeReceiver,
+                              ),
+                              _buildCompactIconText(
+                                Icons.calendar_today,
+                                waybill.date,
+                              ),
+                              _buildCompactText('Driver', waybill.driverName),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactStatusPill(String status, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactText(String label, String value) {
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(color: Color(0xFF34465C), fontSize: 13),
+        children: [
+          TextSpan(text: '$label: '),
+          TextSpan(
+            text: value.trim().isEmpty ? '-' : value,
+            style: const TextStyle(
+              color: Color(0xFF172033),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactIconText(
+    IconData icon,
+    String value, {
+    Color color = const Color(0xFF34465C),
+    bool isBold = false,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 4),
+        Text(
+          value.trim().isEmpty ? '-' : value,
+          style: TextStyle(
+            color: color,
+            fontSize: 13,
+            fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Color _statusColorFor(String status) {
+    final normalizedStatus = status.trim().toLowerCase();
+    if (status == WaybillService.deliveredStatus) return Colors.green;
+    if (status == WaybillService.invoicedStatus) return Colors.blue;
+    if (normalizedStatus == 'sent for invoicing') return Colors.indigo;
+    if (normalizedStatus == 'rejected' ||
+        status == WaybillService.pendingSyncStatus) {
+      return Colors.red;
+    }
+    return Colors.orange;
   }
 
   Widget _buildTableView() {
@@ -1197,7 +1353,11 @@ class _ManagementWaybillListScreenState
             scrollDirection: Axis.horizontal,
             child: ConstrainedBox(
               constraints: BoxConstraints(
-                minWidth: isRejectedWaybillList ? 1320 : 1080,
+                minWidth: isRejectedWaybillList
+                    ? 1440
+                    : _showsDeliveredDate
+                    ? 1200
+                    : 1080,
               ),
               child: DataTable(
                 columnSpacing: 24,
@@ -1211,6 +1371,8 @@ class _ManagementWaybillListScreenState
                   const DataColumn(label: Text('Waybill No.')),
                   const DataColumn(label: Text('BAJ No.')),
                   const DataColumn(label: Text('Date')),
+                  if (_showsDeliveredDate)
+                    const DataColumn(label: Text('Delivered At')),
                   const DataColumn(label: Text('Client/Receiver')),
                   const DataColumn(label: Text('Driver')),
                   const DataColumn(label: Text('Status')),
@@ -1229,6 +1391,8 @@ class _ManagementWaybillListScreenState
                       ),
                       DataCell(Text(waybill.bajNumber)),
                       DataCell(Text(waybill.date)),
+                      if (_showsDeliveredDate)
+                        DataCell(Text(_formatDateTime(waybill.deliveredAt))),
                       DataCell(
                         SizedBox(
                           width: 220,
@@ -1369,6 +1533,7 @@ class _ManagementHero extends StatelessWidget {
   final int sentCount;
   final int issueCount;
   final UserStatsModel userStats;
+  final VoidCallback onLogout;
 
   const _ManagementHero({
     required this.managerName,
@@ -1377,6 +1542,7 @@ class _ManagementHero extends StatelessWidget {
     required this.sentCount,
     required this.issueCount,
     required this.userStats,
+    required this.onLogout,
   });
 
   @override
@@ -1395,14 +1561,12 @@ class _ManagementHero extends StatelessWidget {
           ),
         ],
       ),
-      child: Wrap(
-        spacing: 18,
-        runSpacing: 16,
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCompact = constraints.maxWidth < 860;
+          final titleSize = isCompact ? 22.0 : 23.0;
+          final header = Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 width: 54,
@@ -1419,63 +1583,86 @@ class _ManagementHero extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Management Control Center',
-                    style: TextStyle(
-                      color: Color(0xFF172033),
-                      fontSize: 23,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  if (managerName.trim().isNotEmpty) ...[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      'Welcome, $managerName',
-                      style: const TextStyle(
-                        color: Color(0xFF172033),
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
+                      'Management Control Center',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: const Color(0xFF172033),
+                        fontSize: titleSize,
+                        fontWeight: FontWeight.bold,
+                        height: 1.1,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 5),
+                    if (managerName.trim().isNotEmpty) ...[
+                      Text(
+                        'Welcome, $managerName',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF172033),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                    const Text(
+                      'Monitor company deliveries, invoice movement, and exceptions.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: Color(0xFF5B718C)),
+                    ),
                   ],
-                  const Text(
-                    'Monitor company deliveries, invoice movement, and exceptions.',
-                    style: TextStyle(color: Color(0xFF5B718C)),
-                  ),
-                ],
+                ),
               ),
+              if (isCompact) ...[
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
+                  onPressed: onLogout,
+                  tooltip: 'Logout',
+                  icon: const Icon(Icons.logout, size: 20),
+                ),
+              ],
             ],
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          );
+
+          final summary = Column(
+            crossAxisAlignment: isCompact
+                ? CrossAxisAlignment.start
+                : CrossAxisAlignment.end,
             children: [
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
+              _HeroPillRow(
+                isCompact: isCompact,
+                pills: [
                   _HeroPill(
                     label: 'Total',
                     value: totalCount.toString(),
                     icon: Icons.inventory_2,
+                    isCompact: isCompact,
                   ),
                   _HeroPill(
                     label: 'Delivered',
                     value: deliveredCount.toString(),
                     icon: Icons.local_shipping,
+                    isCompact: isCompact,
                   ),
                   _HeroPill(
                     label: 'Sent',
                     value: sentCount.toString(),
                     icon: Icons.outbox_rounded,
+                    isCompact: isCompact,
                   ),
                   _HeroPill(
                     label: 'Rejected',
                     value: issueCount.toString(),
                     icon: Icons.report_problem,
+                    isCompact: isCompact,
                   ),
                 ],
               ),
@@ -1500,8 +1687,24 @@ class _ManagementHero extends StatelessWidget {
                 ],
               ),
             ],
-          ),
-        ],
+          );
+
+          if (isCompact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [header, const SizedBox(height: 16), summary],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(child: header),
+              const SizedBox(width: 18),
+              Flexible(child: summary),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1561,44 +1764,78 @@ class _UserHeroPill extends StatelessWidget {
   }
 }
 
+class _HeroPillRow extends StatelessWidget {
+  final bool isCompact;
+  final List<Widget> pills;
+
+  const _HeroPillRow({required this.isCompact, required this.pills});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isCompact) {
+      return Wrap(spacing: 10, runSpacing: 10, children: pills);
+    }
+
+    return Row(
+      children: [
+        for (var index = 0; index < pills.length; index++) ...[
+          if (index > 0) const SizedBox(width: 6),
+          Expanded(child: pills[index]),
+        ],
+      ],
+    );
+  }
+}
+
 class _HeroPill extends StatelessWidget {
   final String label;
   final String value;
   final IconData icon;
+  final bool isCompact;
 
   const _HeroPill({
     required this.label,
     required this.value,
     required this.icon,
+    this.isCompact = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+      padding: EdgeInsets.symmetric(
+        horizontal: isCompact ? 5 : 13,
+        vertical: isCompact ? 8 : 10,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xFFEAF3FF),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(isCompact ? 14 : 18),
         border: Border.all(color: const Color(0xFFD6E4F5)),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: isCompact ? MainAxisSize.max : MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: const Color(0xFF0F5FB8), size: 18),
-          const SizedBox(width: 8),
+          if (!isCompact) ...[
+            Icon(icon, color: const Color(0xFF0F5FB8), size: 18),
+            const SizedBox(width: 8),
+          ],
           Text(
             value,
-            style: const TextStyle(
-              color: Color(0xFF0F5FB8),
-              fontSize: 18,
+            style: TextStyle(
+              color: const Color(0xFF0F5FB8),
+              fontSize: isCompact ? 13 : 18,
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(width: 6),
+          SizedBox(width: isCompact ? 3 : 6),
           Text(
             label,
-            style: const TextStyle(
-              color: Color(0xFF34465C),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: const Color(0xFF34465C),
+              fontSize: isCompact ? 10 : null,
               fontWeight: FontWeight.w600,
             ),
           ),
