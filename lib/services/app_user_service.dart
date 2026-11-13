@@ -244,6 +244,7 @@ class AppUserService {
     required String password,
     required String role,
     String department = '',
+    String phoneNumber = '',
     bool isDirector = false,
   }) async {
     final secondaryAuth = await _getSecondaryAuth();
@@ -271,6 +272,7 @@ class AppUserService {
         email: email.trim(),
         role: role.trim(),
         department: department.trim(),
+        phoneNumber: phoneNumber.trim(),
         tempPass: password,
         isActive: true,
         isDirector: isDirector,
@@ -352,6 +354,41 @@ class AppUserService {
     );
   }
 
+  static Future<void> updateDriverPhone(String userId, String phone) async {
+    final userRef = _users.doc(userId);
+    await _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(userRef);
+      final data = snapshot.data();
+      if (data == null) throw StateError('Driver not found.');
+      final current = AppUserModel.fromMap(data);
+      if (current.role.trim().toLowerCase() != 'driver') {
+        throw StateError('This account is no longer a driver.');
+      }
+      final now = DateTime.now().toIso8601String();
+      final updated = current.copyWith(
+        phoneNumber: phone.trim(),
+        updatedAt: now,
+      );
+      final index = current.isActive
+          ? await transaction.get(_driverIndexDoc)
+          : null;
+      transaction.update(userRef, {
+        'phoneNumber': updated.phoneNumber,
+        'updatedAt': now,
+      });
+      if (index != null) {
+        transaction.set(_driverIndexDoc, {
+          'drivers': _updatedDriverIndexEntries(
+            index.data()?['drivers'],
+            oldUser: current,
+            newUser: updated,
+          ),
+          'updatedAt': now,
+        }, SetOptions(merge: true));
+      }
+    });
+  }
+
   static Future<void> sendPasswordReset(String email) async {
     await _auth.sendPasswordResetEmail(email: email.trim());
   }
@@ -377,6 +414,7 @@ class AppUserService {
 
     return oldUser?.fullName.trim() != newUser.fullName.trim() ||
         oldUser?.email.trim() != newUser.email.trim() ||
+        oldUser?.phoneNumber.trim() != newUser.phoneNumber.trim() ||
         oldUser?.department.trim() != newUser.department.trim();
   }
 
@@ -423,6 +461,7 @@ class AppUserService {
       'fullName': user.fullName.trim(),
       'email': user.email.trim(),
       'department': user.department.trim(),
+      'phoneNumber': user.phoneNumber.trim(),
       'role': 'driver',
       'isActive': true,
       'createdAt': user.createdAt,
