@@ -1,0 +1,7 @@
+# Copy to key.properties and fill in your upload keystore details.
+# Keep key.properties and the keystore private and backed up securely.
+# storeFile is relative to android/app; use forward slashes for absolute Windows paths.
+storeFile=../upload-keystore.jks
+storePassword=REPLACE_WITH_STORE_PASSWORD
+keyPassword=REPLACE_WITH_KEY_PASSWORD
+keyAlias=upload

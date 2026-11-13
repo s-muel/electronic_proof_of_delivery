@@ -302,7 +302,9 @@ class _DriverDeliveryScreenState extends State<DriverDeliveryScreen> {
       final receiverEmail = receiverEmailController.text.trim();
       final receiverPhone = receiverPhoneController.text.trim();
       DeliveryEmailResult? emailResult;
-      if (deliveryReadyForSharing && receiverEmail.isNotEmpty) {
+      if (DeliveryEmailService.isEnabled &&
+          deliveryReadyForSharing &&
+          receiverEmail.isNotEmpty) {
         emailResult = await DeliveryEmailService.sendSignedWaybill(
           waybill: savedWaybill,
           receiverEmail: receiverEmail,

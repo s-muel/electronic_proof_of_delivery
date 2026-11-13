@@ -1,4 +1,4 @@
-package com.example.e_pod
+package com.bajfreight.epod
 
 import android.content.ActivityNotFoundException
 import android.content.Intent

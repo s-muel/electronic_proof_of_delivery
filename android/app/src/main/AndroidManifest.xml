@@ -3,7 +3,8 @@
     <uses-permission android:name="android.permission.CAMERA" />
 
     <application
-        android:label="e_pod"
+        android:label="BAJ E-POD"
+        android:usesCleartextTraffic="false"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <provider

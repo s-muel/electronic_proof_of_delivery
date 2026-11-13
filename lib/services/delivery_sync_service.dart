@@ -19,10 +19,13 @@ class DeliverySyncService {
       final syncedWaybill = await _syncWaybill(waybill);
 
       if (syncedWaybill != null) {
-        await WaybillService.updateWaybillByNumber(syncedWaybill);
         if (shouldUseFirestoreData) {
-          await FirestoreWaybillService.updateWaybill(syncedWaybill);
+          await FirestoreWaybillService.updateWaybill(
+            syncedWaybill,
+          ).timeout(const Duration(seconds: 30));
         }
+        // Keep the local retry record until the remote write is confirmed.
+        await WaybillService.updateWaybillByNumber(syncedWaybill);
         syncedCount++;
       }
     }

@@ -1,0 +1,5 @@
+Generated using the built-in image generation tool.
+
+Create a Google Play feature graphic for BAJ E-POD. Exact canvas 1024 pixels wide by 500 pixels tall, opaque background, landscape. Clean professional navy blue and bright blue logistics brand. Text exactly 'BAJ E-POD' and on a second line 'Electronic Proof of Delivery'. Use a simple illustration of a delivery truck, a document with a checkmark and pen. Large legible typography, ample padding, polished flat vector-like aesthetic. No phone mockups, no additional text, no store badges, no ranking or price claims. Save a PNG suitable for Play Store upload.
+
+Final upload asset: feature-graphic-1024x500.png, 1024x500 pixels, opaque PNG.

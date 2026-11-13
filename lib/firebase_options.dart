@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyAduDoBbwrQz9Fz1Y18n5cg11yvF9VcceQ',
-    appId: '1:81968705855:android:2569bfa50f1ca4fd39a38a',
+    appId: '1:81968705855:android:21a6450e6c26c2b839a38a',
     messagingSenderId: '81968705855',
     projectId: 'bajfreight-system',
     storageBucket: 'bajfreight-system.firebasestorage.app',

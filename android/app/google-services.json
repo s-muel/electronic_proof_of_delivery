@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:81968705855:android:21a6450e6c26c2b839a38a",
+        "android_client_info": {
+          "package_name": "com.bajfreight.epod"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAduDoBbwrQz9Fz1Y18n5cg11yvF9VcceQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:81968705855:android:2569bfa50f1ca4fd39a38a",
         "android_client_info": {
           "package_name": "com.example.e_pod"

@@ -41,35 +41,44 @@ class CloudinaryService {
         'https://api.cloudinary.com/v1_1/$cloudName/image/upload',
       );
 
-      final request = http.MultipartRequest('POST', url);
+      final client = http.Client();
+      try {
+        final request = http.MultipartRequest('POST', url);
 
-      request.fields['upload_preset'] = uploadPreset;
-      request.fields['folder'] = folder;
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'file',
-          imageBytes,
-          filename: '$fileName.$extension',
-        ),
-      );
+        request.fields['upload_preset'] = uploadPreset;
+        request.fields['folder'] = folder;
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            imageBytes,
+            filename: '$fileName.$extension',
+          ),
+        );
 
-      final response = await request.send();
-      final responseBody = await response.stream.bytesToString();
-      final data = jsonDecode(responseBody) as Map<String, dynamic>;
+        final response = await client
+            .send(request)
+            .timeout(const Duration(seconds: 30));
+        final responseBody = await response.stream.bytesToString().timeout(
+          const Duration(seconds: 30),
+        );
+        final data = jsonDecode(responseBody) as Map<String, dynamic>;
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final secureUrl = data['secure_url'] as String?;
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final secureUrl = data['secure_url'] as String?;
 
-        if (secureUrl == null || secureUrl.isEmpty) {
-          throw Exception('Cloudinary response did not contain secure_url');
+          if (secureUrl == null || secureUrl.isEmpty) {
+            throw Exception('Cloudinary response did not contain secure_url');
+          }
+
+          return secureUrl;
+        } else {
+          final error = data['error'];
+          final message = error is Map ? error['message'] : responseBody;
+          print('Cloudinary upload failed: ${response.statusCode} $message');
+          return null;
         }
-
-        return secureUrl;
-      } else {
-        final error = data['error'];
-        final message = error is Map ? error['message'] : responseBody;
-        print('Cloudinary upload failed: ${response.statusCode} $message');
-        return null;
+      } finally {
+        client.close();
       }
     } catch (e) {
       print('Cloudinary upload error: $e');

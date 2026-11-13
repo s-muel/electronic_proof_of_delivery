@@ -92,9 +92,14 @@ class PdfService {
       return null;
     }
 
+    final imageUri = Uri.tryParse(imageUrl);
+    if (imageUri == null || imageUri.scheme != 'https') {
+      return null;
+    }
+
     try {
       final response = await http
-          .get(Uri.parse(imageUrl))
+          .get(imageUri)
           .timeout(const Duration(seconds: 12));
 
       if (response.statusCode >= 200 && response.statusCode < 300) {

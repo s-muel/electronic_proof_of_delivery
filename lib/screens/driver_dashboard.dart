@@ -197,17 +197,37 @@ class _DriverDashboardState extends State<DriverDashboard> {
 
     setState(() => isSyncing = true);
 
-    final syncedCount = await DeliverySyncService.syncPendingDeliveries();
-    await loadPendingWaybillsFromFirestore();
-
-    if (!mounted) return;
-
-    setState(() => isSyncing = false);
-
-    if (syncedCount > 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$syncedCount offline delivery sync completed')),
+    try {
+      final syncedCount = await DeliverySyncService.syncPendingDeliveries();
+      if (!mounted) return;
+      loadPendingWaybills();
+      await loadPendingWaybillsFromFirestore().timeout(
+        const Duration(seconds: 30),
       );
+      if (!mounted) return;
+      final pendingCount = pendingSyncWaybills.length;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '$syncedCount delivery sync completed. '
+            '$pendingCount still waiting to sync.',
+          ),
+        ),
+      );
+    } catch (error) {
+      debugPrint('DELIVERY SYNC ERROR: $error');
+      if (!mounted) return;
+      loadPendingWaybills();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Sync could not finish. Unsynced deliveries remain saved on this '
+            'device. Check your connection and tap Retry Sync.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => isSyncing = false);
     }
   }
 

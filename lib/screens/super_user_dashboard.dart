@@ -990,7 +990,10 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                         SwitchListTile(
                           contentPadding: EdgeInsets.zero,
                           value: smtpSsl,
-                          title: const Text('Use SSL'),
+                          title: const Text('Use direct TLS (SSL)'),
+                          subtitle: const Text(
+                            'When off, STARTTLS is required. Certificates must be valid.',
+                          ),
                           onChanged: (value) {
                             setDialogState(() => smtpSsl = value);
                           },
@@ -1070,7 +1073,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                                 smtpHost: hostController.text,
                                 smtpPort: int.parse(portController.text.trim()),
                                 smtpSsl: smtpSsl,
-                                ignoreBadCertificate: true,
+                                ignoreBadCertificate: false,
                                 senderEmail: senderEmailController.text,
                                 senderPassword: senderPasswordController.text,
                                 senderName: senderNameController.text,
@@ -2940,9 +2943,10 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
         Card(
           child: ListTile(
             leading: const CircleAvatar(child: Icon(Icons.email)),
-            title: const Text('SMTP Email Settings'),
+            enabled: false,
+            title: const Text('Email sending temporarily unavailable'),
             subtitle: const Text(
-              'Configure the company mail account used to email signed waybills.',
+              'Use PDF or WhatsApp sharing for signed waybills.',
             ),
             trailing: const Icon(Icons.chevron_right),
             onTap: _showSmtpSettingsDialog,

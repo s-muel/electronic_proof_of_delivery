@@ -64,9 +64,7 @@ class SettingsService {
       smtpHost: prefs.getString(_smtpHostKey) ?? defaults.smtpHost,
       smtpPort: prefs.getInt(_smtpPortKey) ?? defaults.smtpPort,
       smtpSsl: prefs.getBool(_smtpSslKey) ?? defaults.smtpSsl,
-      ignoreBadCertificate:
-          prefs.getBool(_smtpIgnoreBadCertificateKey) ??
-          defaults.ignoreBadCertificate,
+      ignoreBadCertificate: false,
       senderEmail: prefs.getString(_senderEmailKey) ?? defaults.senderEmail,
       senderPassword:
           prefs.getString(_senderPasswordKey) ?? defaults.senderPassword,
@@ -91,10 +89,7 @@ class SettingsService {
     await prefs.setString(_smtpHostKey, settings.smtpHost.trim());
     await prefs.setInt(_smtpPortKey, settings.smtpPort);
     await prefs.setBool(_smtpSslKey, settings.smtpSsl);
-    await prefs.setBool(
-      _smtpIgnoreBadCertificateKey,
-      settings.ignoreBadCertificate,
-    );
+    await prefs.setBool(_smtpIgnoreBadCertificateKey, false);
     await prefs.setString(_senderEmailKey, settings.senderEmail.trim());
     await prefs.setString(_senderPasswordKey, settings.senderPassword);
     await prefs.setString(_senderNameKey, settings.senderName.trim());
