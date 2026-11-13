@@ -11,6 +11,7 @@ import '../services/waybill_service.dart';
 import '../utils/platform_flags.dart';
 import 'create_waybill_screen.dart';
 import 'login_screen.dart';
+import 'manager_sms_screen.dart';
 import 'waybill_details_screen.dart';
 
 class ManagerDashboard extends StatefulWidget {
@@ -28,6 +29,8 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
   String managerName = '';
   String managerUserId = '';
   String? openingCardKey;
+  bool _showSms = false;
+  bool _smsOpened = false;
 
   int get _totalCount => dashboardStats?.total ?? waybills.length;
 
@@ -403,25 +406,58 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
+      floatingActionButton: isWideScreen
+          ? null
+          : FloatingActionButton.small(
+              onPressed: _openSms,
+              tooltip: 'SMS',
+              child: const Icon(Icons.sms_outlined),
+            ),
       body: Row(
         children: [
           if (isWideScreen) _buildSidebar(context),
           Expanded(
-            child: SafeArea(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  isWideScreen ? 22 : 14,
-                  16,
-                  isWideScreen ? 22 : 14,
-                  16,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Offstage(
+                  offstage: isWideScreen && _showSms,
+                  child: SafeArea(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        isWideScreen ? 22 : 14,
+                        16,
+                        isWideScreen ? 22 : 14,
+                        16,
+                      ),
+                      child: SingleChildScrollView(child: dashboardContent),
+                    ),
+                  ),
                 ),
-                child: SingleChildScrollView(child: dashboardContent),
-              ),
+                if (_smsOpened)
+                  Offstage(
+                    offstage: !isWideScreen || !_showSms,
+                    child: const ManagerSmsScreen(embedded: true),
+                  ),
+              ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  void _openSms() {
+    if (MediaQuery.sizeOf(context).width > 900) {
+      setState(() {
+        _smsOpened = true;
+        _showSms = true;
+      });
+      return;
+    }
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const ManagerSmsScreen()));
   }
 
   Widget _buildSidebar(BuildContext context) {
@@ -480,8 +516,8 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
               _SidebarItem(
                 icon: Icons.dashboard_customize,
                 label: 'Dashboard',
-                isActive: true,
-                onTap: () {},
+                isActive: !_showSms,
+                onTap: () => setState(() => _showSms = false),
               ),
               _SidebarItem(
                 icon: Icons.inventory_2,
@@ -512,6 +548,12 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
                 icon: Icons.report_problem,
                 label: 'My Rejected',
                 onTap: _openMyRejectedWaybills,
+              ),
+              _SidebarItem(
+                icon: Icons.sms_outlined,
+                label: 'SMS',
+                isActive: _showSms,
+                onTap: _openSms,
               ),
               const Spacer(),
               Container(

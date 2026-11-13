@@ -4,6 +4,7 @@ class AppUserModel {
   final String email;
   final String role;
   final String department;
+  final String phoneNumber;
   final String tempPass;
   final bool isActive;
   final bool isDirector;
@@ -16,6 +17,7 @@ class AppUserModel {
     required this.email,
     required this.role,
     this.department = '',
+    this.phoneNumber = '',
     this.tempPass = '',
     this.isActive = true,
     this.isDirector = false,
@@ -30,6 +32,7 @@ class AppUserModel {
       email: map['email'] ?? '',
       role: map['role'] ?? '',
       department: map['department'] ?? '',
+      phoneNumber: map['phoneNumber']?.toString() ?? '',
       tempPass: map['tempPass'] ?? '',
       isActive: map['isActive'] ?? true,
       isDirector: _boolFromValue(map['isDirector']),
@@ -45,6 +48,7 @@ class AppUserModel {
       'email': email,
       'role': role,
       'department': department,
+      'phoneNumber': phoneNumber,
       'tempPass': tempPass,
       'isActive': isActive,
       'isDirector': isDirector,
@@ -59,6 +63,7 @@ class AppUserModel {
     String? email,
     String? role,
     String? department,
+    String? phoneNumber,
     String? tempPass,
     bool? isActive,
     bool? isDirector,
@@ -71,6 +76,7 @@ class AppUserModel {
       email: email ?? this.email,
       role: role ?? this.role,
       department: department ?? this.department,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
       tempPass: tempPass ?? this.tempPass,
       isActive: isActive ?? this.isActive,
       isDirector: isDirector ?? this.isDirector,

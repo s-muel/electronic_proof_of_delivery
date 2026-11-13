@@ -463,6 +463,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     final formKey = GlobalKey<FormState>();
     final fullNameController = TextEditingController();
     final emailController = TextEditingController();
+    final driverPhoneController = TextEditingController();
     final passwordController = TextEditingController();
     final confirmPasswordController = TextEditingController();
     var selectedRole = 'officer';
@@ -620,6 +621,17 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                           ),
                         ],
                         const SizedBox(height: 12),
+                        if (selectedRole == 'driver') ...[
+                          TextFormField(
+                            controller: driverPhoneController,
+                            keyboardType: TextInputType.phone,
+                            decoration: const InputDecoration(
+                              labelText: 'Driver phone for SMS',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
                         TextFormField(
                           controller: passwordController,
                           obscureText: obscurePassword,
@@ -701,6 +713,9 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                             final createdUser = await AppUserService.createUser(
                               fullName: fullNameController.text,
                               email: emailController.text,
+                              phoneNumber: selectedRole == 'driver'
+                                  ? driverPhoneController.text
+                                  : '',
                               password: passwordController.text,
                               role: selectedRole,
                               department: selectedRole == 'management'
@@ -740,6 +755,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
 
     fullNameController.dispose();
     emailController.dispose();
+    driverPhoneController.dispose();
     passwordController.dispose();
     confirmPasswordController.dispose();
 
@@ -2447,10 +2463,61 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     );
   }
 
+  Future<void> _editDriverPhone(AppUserModel user) async {
+    var phone = user.phoneNumber;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Driver phone for SMS'),
+        content: TextFormField(
+          initialValue: phone,
+          keyboardType: TextInputType.phone,
+          onChanged: (value) => phone = value,
+          decoration: const InputDecoration(labelText: 'Ghana phone number'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || saved != true) return;
+    try {
+      await AppUserService.updateDriverPhone(user.userId, phone);
+      if (!mounted) return;
+      setState(() {
+        final index = users.indexWhere((item) => item.userId == user.userId);
+        if (index != -1)
+          users[index] = users[index].copyWith(phoneNumber: phone.trim());
+        _userPageCache.clear();
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Driver phone saved.')));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save the driver phone.')),
+      );
+    }
+  }
+
   Widget _userActions(AppUserModel user) {
     return Wrap(
       spacing: 8,
       children: [
+        if (user.role.trim().toLowerCase() == 'driver')
+          IconButton(
+            onPressed: () => _editDriverPhone(user),
+            icon: const Icon(Icons.phone_outlined),
+            tooltip: 'Edit driver phone',
+          ),
         IconButton(
           onPressed: () => _sendPasswordReset(user),
           icon: const Icon(Icons.lock_reset),
