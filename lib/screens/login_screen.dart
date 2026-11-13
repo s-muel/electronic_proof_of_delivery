@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../models/app_user_model.dart';
 import '../services/firebase_auth_service.dart';
@@ -25,24 +24,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool isLoading = false;
   bool obscurePassword = true;
-
-  Future<void> _openPrivacyPolicy() async {
-    try {
-      final opened = await launchUrl(
-        Uri.parse('https://baj-epod-privacy.web.app/privacy-policy.html'),
-        mode: LaunchMode.externalApplication,
-      );
-      if (opened) return;
-    } catch (_) {
-      // Show the same recovery message for unavailable browsers and launch errors.
-    }
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Could not open the privacy policy. Please try again.'),
-      ),
-    );
-  }
 
   @override
   void dispose() {
@@ -281,11 +262,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  TextButton.icon(
-                    onPressed: _openPrivacyPolicy,
-                    icon: const Icon(Icons.privacy_tip_outlined, size: 18),
-                    label: const Text('Privacy Policy'),
-                  ),
                   const Text(
                     'v 1.0.2',
                     style: TextStyle(
