@@ -354,22 +354,19 @@ class AppUserService {
     );
   }
 
-  static Future<void> updateDriverPhone(String userId, String phone) async {
+  static Future<void> updateUserPhone(String userId, String phone) async {
     final userRef = _users.doc(userId);
     await _firestore.runTransaction((transaction) async {
       final snapshot = await transaction.get(userRef);
       final data = snapshot.data();
-      if (data == null) throw StateError('Driver not found.');
+      if (data == null) throw StateError('User not found.');
       final current = AppUserModel.fromMap(data);
-      if (current.role.trim().toLowerCase() != 'driver') {
-        throw StateError('This account is no longer a driver.');
-      }
       final now = DateTime.now().toIso8601String();
       final updated = current.copyWith(
         phoneNumber: phone.trim(),
         updatedAt: now,
       );
-      final index = current.isActive
+      final index = _isActiveDriver(current)
           ? await transaction.get(_driverIndexDoc)
           : null;
       transaction.update(userRef, {

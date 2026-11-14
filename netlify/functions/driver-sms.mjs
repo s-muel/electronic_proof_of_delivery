@@ -3,8 +3,14 @@ import { createSign } from 'node:crypto';
 const project = 'bajfreight-system';
 const root = `https://firestore.googleapis.com/v1/projects/${project}/databases/(default)/documents`;
 const roles = new Set(['manager_officer', 'manager/officer']);
-const fetchBounded = (url, options = {}) =>
-  fetch(url, { ...options, signal: AbortSignal.timeout(5000) });
+const officeRoles = new Set([...roles, 'officer', 'officer in charge', 'manager', 'management']);
+const department = (profile) => String(profile?.department ?? '').trim();
+const isOfficePeer = (member, sender) =>
+  Boolean(department(sender)) && department(member) === department(sender) &&
+  member?.isActive === true && officeRoles.has(String(member.role).trim().toLowerCase());
+const superUserRoles = new Set(['super_user', 'super user', 'admin']);
+const fetchBounded = (url, options = {}, timeoutMs = 5000) =>
+  fetch(url, { ...options, signal: AbortSignal.timeout(timeoutMs) });
 const json = (statusCode, data) => ({
   statusCode,
   headers: {
@@ -31,6 +37,68 @@ export function normalizePhone(value) {
   if (/^0\d{9}$/.test(digits)) digits = '233' + digits.slice(1);
   else if (/^\d{9}$/.test(digits)) digits = '233' + digits;
   return /^233\d{9}$/.test(digits) ? digits : '';
+}
+
+export function acceptedProviderId(data, phone) {
+  const item = Array.isArray(data)
+    ? data.find((entry) => normalizePhone(entry?.recipient) === phone)
+    : data;
+  if (item?.recipient != null && normalizePhone(item.recipient) !== phone) return '';
+  return typeof item?.id === 'string' ? item.id.trim() : '';
+}
+
+async function deliveryReports(records, apiKey) {
+  const eligible = (record) => record.status === 'accepted' && Boolean(record.providerId);
+  const ids = [...new Set(records.filter(eligible).map((record) => record.providerId))];
+  if (!ids.length) return records;
+  const unavailable = (record, reason) => ({
+    ...record, detail: `Accepted by Arkesel. Delivery status unavailable: ${reason}.`,
+  });
+  const unavailableForAll = (reason) =>
+    records.map((record) => eligible(record) ? unavailable(record, reason) : record);
+  if (!apiKey) return unavailableForAll('BAJ Arkesel API key is not configured');
+  let reports;
+  try {
+    const response = await fetchBounded(
+      'https://sms.arkesel.com/api/v2/sms/message-reports',
+      {
+        method: 'POST',
+        headers: { 'api-key': apiKey, 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ msg_ids: ids }),
+      },
+    );
+    if (!response.ok) return unavailableForAll(`Arkesel report request returned HTTP ${response.status}`);
+    const report = await response.json();
+    if (report?.status !== 'success' || !report.data || typeof report.data !== 'object') {
+      return unavailableForAll('Arkesel did not return a usable report');
+    }
+    reports = report.data;
+  } catch {
+    return unavailableForAll('could not read the Arkesel delivery report');
+  }
+  return records.map((record) => {
+    if (!eligible(record)) return record;
+    const data = Object.hasOwn(reports, record.providerId) ? reports[record.providerId] : null;
+    if (!data || data.status === 'error') {
+      return unavailable(record, 'Arkesel returned no report for this message ID');
+    }
+    if (normalizePhone(data.recipient) !== record.phone) {
+      return unavailable(record, 'the report did not match this recipient');
+    }
+    switch (data.status) {
+      case 'DELIVERED':
+        return { ...record, status: 'delivered', detail: 'Arkesel confirmed delivery to the phone.' };
+      case 'NOT_DELIVERED':
+      case 'PROHIBITED':
+      case 'EXPIRED':
+        return { ...record, status: 'not_delivered', detail: `Arkesel delivery report: ${data.status}.` };
+      case 'SUBMITTED':
+      case 'QUEUED':
+        return { ...record, detail: `Arkesel: ${data.status}. Delivery is not confirmed yet.` };
+      default:
+        return unavailable(record, 'Arkesel returned an unrecognized delivery status');
+    }
+  });
 }
 
 async function adminToken() {
@@ -78,8 +146,20 @@ export async function handler(event) {
     const owner = `users/${encodeURIComponent(uid)}`;
     stage = 'manager profile lookup';
     const profile = await read(owner, token);
-    if (!profile || profile.isActive !== true || !roles.has(String(profile.role).trim().toLowerCase())) {
-      return json(403, { error: 'Only active Transport Managers can use driver SMS.' });
+    const role = String(profile?.role).trim().toLowerCase();
+    let payload;
+    if (event.httpMethod === 'POST') {
+      try { payload = JSON.parse(event.body || '{}') || {}; }
+      catch { return json(400, { error: 'Invalid message request.' }); }
+    }
+    const testSms = payload?.testSms === 'true';
+    if (profile?.isActive !== true || !(testSms ? superUserRoles : roles).has(role)) {
+      return json(403, { error: testSms
+        ? 'Only active Super Users can send test SMS.'
+        : 'Only active Transport Managers can use driver SMS.' });
+    }
+    if (testSms && process.env.BAJ_SMS_ALLOW_TEST !== 'true') {
+      return json(403, { error: 'Direct test SMS is not enabled on this server.' });
     }
 
     stage = 'SMS service-account authentication';
@@ -87,41 +167,70 @@ export async function handler(event) {
     stage = 'Firestore SMS history and driver access';
     const collection = `${owner}/driverSmsHistory`;
     if (event.httpMethod === 'GET') {
+      if (event.queryStringParameters?.directory === 'office') {
+        if (!department(profile)) return json(200, { members: [] });
+        const result = await fetchBounded(`${root}:runQuery`, {
+          method: 'POST',
+          headers: { ...auth(admin), 'content-type': 'application/json' },
+          body: JSON.stringify({ structuredQuery: {
+            from: [{ collectionId: 'users' }],
+            select: { fields: ['fullName', 'phoneNumber', 'role', 'department', 'isActive']
+              .map((fieldPath) => ({ fieldPath })) },
+            where: { fieldFilter: { field: { fieldPath: 'department' },
+              op: 'EQUAL', value: { stringValue: profile.department } } },
+          } }),
+        });
+        if (!result.ok) throw new Error('Office directory lookup failed');
+        const members = (await result.json()).flatMap(({ document: doc }) => {
+          if (!doc) return [];
+          const member = fields(doc);
+          const userId = doc.name.split('/').at(-1);
+          return isOfficePeer(member, profile) && userId !== uid
+            ? [{ ...member, userId }] : [];
+        });
+        return json(200, { members });
+      }
       const params = new URLSearchParams({ pageSize: '25', orderBy: 'createdAt desc' });
       const cursor = event.queryStringParameters?.cursor;
       if (cursor) params.set('pageToken', cursor);
       const result = await fetchBounded(`${root}/${collection}?${params}`, { headers: auth(admin) });
       if (!result.ok) throw new Error('History read failed');
       const page = await result.json();
-      return json(200, { records: (page.documents || []).map(fields), cursor: page.nextPageToken });
+      const key = process.env.BAJ_ARKESEL_API_KEY?.trim();
+      const records = await deliveryReports((page.documents || []).map(fields), key);
+      return json(200, { records, cursor: page.nextPageToken });
     }
 
-    let payload;
-    try { payload = JSON.parse(event.body || '{}') || {}; }
-    catch { return json(400, { error: 'Invalid message request.' }); }
     const { driverId, requestId, phone } = payload;
+    const officeSms = !testSms && payload.recipientType === 'office';
     const message = typeof payload.message === 'string' ? payload.message.trim() : '';
-    if (!/^[\w-]{1,128}$/.test(driverId || '') || !/^[a-f0-9]{32}$/.test(requestId || '') ||
+    if ((!testSms && !/^[\w-]{1,128}$/.test(driverId || '')) || !/^[a-f0-9]{32}$/.test(requestId || '') ||
         !message || message.length > 480) {
       return json(400, { error: 'Select a driver and enter a message of 1–480 characters.' });
     }
     const path = `${collection}/${requestId}`;
     const previous = await read(path, admin);
     if (previous) return json(200, { record: previous });
-    const driver = await read(`users/${encodeURIComponent(driverId)}`, admin);
+    const driver = testSms ? null : await read(`users/${encodeURIComponent(driverId)}`, admin);
     const savedPhone = String(driver?.phoneNumber ?? '').trim();
     const to = normalizePhone(phone);
-    if (!driver || driver.isActive === false || driver.role !== 'driver') {
+    if (officeSms && (driverId === uid || !isOfficePeer(driver, profile))) {
+      return json(403, { error: 'Select an active officer or manager in your department.' });
+    }
+    if (!testSms && !officeSms && (!driver || driver.isActive === false || driver.role !== 'driver')) {
       return json(400, { error: 'Select an active driver.' });
     }
     if (!to) return json(400, { error: 'Enter a valid Ghana phone number.' });
     if (savedPhone && to !== normalizePhone(savedPhone)) {
-      return json(409, { error: 'The driver’s number changed. Refresh the driver list before sending.' });
+      return json(409, { error: 'The recipient’s number changed. Refresh the directory before sending.' });
     }
 
     const record = {
       requestId, senderId: uid, senderName: String(profile.fullName || uid),
-      driverId, driverName: String(driver.fullName || 'Driver'), phone: to,
+      driverId: testSms || officeSms ? '' : driverId,
+      recipientId: testSms ? '' : driverId,
+      recipientType: testSms ? 'test' : officeSms ? 'office' : 'driver',
+      driverName: testSms ? 'Direct test SMS' : String(driver.fullName || (officeSms ? 'Office staff' : 'Driver')), phone: to,
       message, createdAt: new Date().toISOString(),
       status: 'pending', detail: '', providerId: '',
     };
@@ -146,14 +255,15 @@ export async function handler(event) {
           method: 'POST',
           headers: { 'api-key': apiKey, 'content-type': 'application/json', accept: 'application/json' },
           body: JSON.stringify({ sender, message, recipients: [to], sandbox: false }),
+        }, 12000);
+        const result = await response.json().catch((error) => {
+          if (error instanceof SyntaxError) return null;
+          throw error;
         });
-        const result = await response.json().catch(() => null);
-        const accepted = Array.isArray(result?.data) && result.data.find(
-          (item) => normalizePhone(item?.recipient) === to && item?.id,
-        );
+        const accepted = acceptedProviderId(result?.data, to);
         if (response.ok && result?.status === 'success' && accepted) {
           record.status = 'accepted';
-          record.providerId = String(accepted.id);
+          record.providerId = accepted;
           record.detail = 'Arkesel accepted the SMS for delivery.';
         } else if (response.status >= 500 || (response.ok && result?.status !== 'error')) {
           record.status = 'unknown';
@@ -162,9 +272,12 @@ export async function handler(event) {
           record.status = 'failed';
           record.detail = `Arkesel rejected the SMS (HTTP ${response.status}).`;
         }
-      } catch {
+      } catch (error) {
         record.status = 'unknown';
-        record.detail = 'No confirmation from Arkesel. Check the provider before resending.';
+        const timedOut = ['TimeoutError', 'AbortError'].includes(error?.name);
+        record.detail = timedOut
+          ? 'Arkesel did not respond in time. The SMS may have arrived; check before resending.'
+          : 'Could not read the Arkesel response. The SMS may have arrived; check before resending.';
       }
     }
 

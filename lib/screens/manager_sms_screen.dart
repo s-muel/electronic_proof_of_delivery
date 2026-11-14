@@ -1,14 +1,10 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
 
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 
 import '../models/app_user_model.dart';
 import '../services/app_user_service.dart';
+import '../services/driver_sms_service.dart';
 
 class ManagerSmsScreen extends StatefulWidget {
   const ManagerSmsScreen({
@@ -40,6 +36,11 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
   );
 
   final _search = TextEditingController();
+  bool _findOffice = false;
+  List<AppUserModel> _officeStaff = [];
+  bool _loadingOffice = false;
+  bool _officeLoaded = false;
+  String? _officeError;
   final _message = TextEditingController();
   final _recipientScroll = ScrollController();
   final _recipients = <String, AppUserModel>{};
@@ -73,64 +74,46 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
     super.dispose();
   }
 
-  Future<Map<String, dynamic>> _request({
-    Map<String, String>? data,
-    String? cursor,
-  }) async {
-    const base = String.fromEnvironment('SMS_FUNCTION_BASE_URL');
-    if (base.isEmpty && !kIsWeb) {
-      throw StateError('Driver SMS needs the BAJ server URL in this build.');
-    }
-    final origin = base.isEmpty
-        ? Uri.base.origin
-        : base.replaceFirst(RegExp(r'/$'), '');
-    final uri = Uri.parse(
-      '$origin/.netlify/functions/driver-sms',
-    ).replace(queryParameters: cursor == null ? null : {'cursor': cursor});
-    if (uri.scheme != 'https' &&
-        uri.host != 'localhost' &&
-        uri.host != '127.0.0.1') {
-      throw StateError('Driver SMS needs a secure server URL.');
-    }
-    final token = await FirebaseAuth.instance.currentUser?.getIdToken().timeout(
-      const Duration(seconds: 10),
-    );
-    if (token == null) throw StateError('Sign in again to use driver SMS.');
-    final headers = {
-      'Authorization': 'Bearer $token',
-      'Content-Type': 'application/json',
-    };
-    final client = http.Client();
-    try {
-      final response =
-          await (data == null
-                  ? client.get(uri, headers: headers)
-                  : client.post(uri, headers: headers, body: jsonEncode(data)))
-              .timeout(const Duration(seconds: 35));
-      Map<String, dynamic> result;
-      try {
-        result = jsonDecode(response.body) as Map<String, dynamic>;
-      } catch (_) {
-        throw StateError(
-          'The SMS endpoint returned an unexpected response (HTTP '
-          '${response.statusCode}). Check that the BAJ SMS function is deployed.',
-        );
-      }
-      if (response.statusCode != 200) {
-        final reason =
-            result['error']?.toString() ?? 'Driver SMS is unavailable.';
-        if (response.statusCode < 500) throw _SmsRejected(reason);
-        throw StateError(reason);
-      }
-      return result;
-    } finally {
-      client.close();
-    }
-  }
-
   String _error(Object error) => error is StateError
       ? error.message
       : 'Could not reach the service. Try again when connected.';
+
+  Future<void> _loadOfficeStaff() async {
+    if (_loadingOffice || _preview) return;
+    setState(() {
+      _loadingOffice = true;
+      _officeError = null;
+    });
+    try {
+      final data = await DriverSmsService.request(officeDirectory: true);
+      if (!mounted) return;
+      setState(() {
+        _officeStaff = (data['members'] as List)
+            .map((item) => AppUserModel.fromMap(item as Map<String, dynamic>))
+            .toList();
+        _officeLoaded = true;
+        if (_sending || _unconfirmed) return;
+        final current = {for (final staff in _officeStaff) staff.userId: staff};
+        for (final id in _recipients.keys.toList()) {
+          if (_recipients[id]!.role == 'driver') continue;
+          final staff = current[id];
+          if (staff == null) {
+            _recipients.remove(id);
+            _phones.remove(id);
+          } else {
+            if (staff.phoneNumber != _recipients[id]!.phoneNumber) {
+              _phones[id] = staff.phoneNumber;
+            }
+            _recipients[id] = staff;
+          }
+        }
+      });
+    } catch (error) {
+      if (mounted) setState(() => _officeError = _error(error));
+    } finally {
+      if (mounted) setState(() => _loadingOffice = false);
+    }
+  }
 
   Future<void> _loadDrivers() async {
     setState(() {
@@ -149,6 +132,7 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
         if (_sending || _unconfirmed) return;
         final current = {for (final driver in drivers) driver.userId: driver};
         for (final id in _recipients.keys.toList()) {
+          if (_recipients[id]!.role != 'driver') continue;
           final refreshed = current[id];
           if (refreshed == null) {
             _recipients.remove(id);
@@ -175,7 +159,9 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
     });
     try {
       if (_preview) return;
-      final page = await _request(cursor: more ? _cursor : null);
+      final page = await DriverSmsService.request(
+        cursor: more ? _cursor : null,
+      );
       if (!mounted) return;
       setState(() {
         final records = (page['records'] as List).cast<Map<String, dynamic>>();
@@ -235,6 +221,7 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
   Future<void> _send() async {
     final message = _message.text.trim();
     if (_sending ||
+        _selectingAll ||
         message.isEmpty ||
         message.length > 480 ||
         _recipients.isEmpty ||
@@ -244,31 +231,6 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
     setState(() => _sending = true);
     try {
       if (!_unconfirmed) {
-        final names = _recipients.values
-            .map((d) => '${d.fullName} · ${_phones[d.userId]!.trim()}')
-            .join('\n');
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(
-              _preview
-                  ? 'Record preview SMS?'
-                  : 'Send SMS to ${_recipients.length} drivers?',
-            ),
-            content: SingleChildScrollView(child: Text('$names\n\n$message')),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text(_preview ? 'Record preview' : 'Send SMS'),
-              ),
-            ],
-          ),
-        );
-        if (!mounted || confirmed != true) return;
         final rng = Random.secure();
         for (final id in _recipients.keys) {
           _retry[id] = {
@@ -277,6 +239,7 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
               (_) => rng.nextInt(256).toRadixString(16).padLeft(2, '0'),
             ).join(),
             'driverId': id,
+            if (_recipients[id]!.role != 'driver') 'recipientType': 'office',
             'phone': _phones[id]!.trim(),
             'message': message,
           };
@@ -287,19 +250,20 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
       final rejected = <String>[];
       final unconfirmedReasons = <String>{};
       for (final entry in _retry.entries.toList()) {
-        final driver = _recipients[entry.key]!;
+        final driverName = _recipients[entry.key]!.fullName;
         final data = entry.value;
         try {
           final record = _preview
               ? <String, dynamic>{
                   ...data,
-                  'driverName': driver.fullName,
+                  'driverName': driverName,
                   'senderName': 'Preview manager',
                   'status': 'preview',
                   'createdAt': DateTime.now().toIso8601String(),
                   'detail': 'Recorded in preview mode. No SMS was sent.',
                 }
-              : (await _request(data: data))['record'] as Map<String, dynamic>;
+              : (await DriverSmsService.request(data: data))['record']
+                    as Map<String, dynamic>;
           if (!mounted) return;
           setState(() {
             _retry.remove(entry.key);
@@ -311,10 +275,10 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
             ];
           });
           recorded++;
-        } on _SmsRejected catch (error) {
+        } on SmsRejected catch (error) {
           if (!mounted) return;
           _retry.remove(entry.key);
-          rejected.add('${driver.fullName}: ${error.message}');
+          rejected.add('$driverName: ${error.message}');
         } catch (error) {
           if (!mounted) return;
           // Keep the original request ID so a retry cannot send it twice.
@@ -340,10 +304,12 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final directoryLoading = _findOffice ? _loadingOffice : _loadingDrivers;
+    final directoryError = _findOffice ? _officeError : _driverError;
     final query = _search.text.trim().toLowerCase();
     final results = query.isEmpty
         ? <AppUserModel>[]
-        : _drivers
+        : (_findOffice ? _officeStaff : _drivers)
               .where(
                 (d) =>
                     !_recipients.containsKey(d.userId) &&
@@ -446,7 +412,7 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
                               ),
                             ),
                             const Text(
-                              'Add one or more drivers, review the job instructions and send an SMS.',
+                              'Add one or more drivers, enter the job instructions and send an SMS.',
                             ),
                             if (_preview)
                               const Text(
@@ -460,9 +426,26 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
                                   children: [
-                                    const Text(
-                                      'FIND DRIVERS',
-                                      style: _sectionLabel,
+                                    Wrap(
+                                      spacing: 8,
+                                      children: [
+                                        ChoiceChip(
+                                          label: const Text('Find Drivers'),
+                                          selected: !_findOffice,
+                                          onSelected: locked
+                                              ? null
+                                              : (_) => _setDirectory(false),
+                                        ),
+                                        ChoiceChip(
+                                          label: const Text(
+                                            'Find Office Staff',
+                                          ),
+                                          selected: _findOffice,
+                                          onSelected: locked
+                                              ? null
+                                              : (_) => _setDirectory(true),
+                                        ),
+                                      ],
                                     ),
                                     const SizedBox(height: 8),
                                     TextField(
@@ -470,49 +453,57 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
                                       enabled: !locked,
                                       onChanged: (_) => setState(() {}),
                                       decoration: InputDecoration(
-                                        labelText:
-                                            'Search driver by name or phone',
+                                        labelText: _findOffice
+                                            ? 'Search your department by name or phone'
+                                            : 'Search driver by name or phone',
                                         prefixIcon: const Icon(Icons.search),
                                         suffixIcon: IconButton(
-                                          tooltip: 'Refresh drivers',
-                                          onPressed: locked || _loadingDrivers
+                                          tooltip: _findOffice
+                                              ? 'Refresh office staff'
+                                              : 'Refresh drivers',
+                                          onPressed: locked || directoryLoading
                                               ? null
-                                              : _loadDrivers,
+                                              : (_findOffice
+                                                    ? _loadOfficeStaff
+                                                    : _loadDrivers),
                                           icon: const Icon(Icons.refresh),
                                         ),
                                       ),
                                     ),
-                                    if (_loadingDrivers || _selectingAll)
+                                    if (directoryLoading || _selectingAll)
                                       LinearProgressIndicator(
                                         semanticsLabel: _selectingAll
                                             ? 'Selecting all drivers'
-                                            : 'Loading drivers',
+                                            : (_findOffice
+                                                  ? 'Loading office staff'
+                                                  : 'Loading drivers'),
                                       ),
                                     Align(
                                       alignment: Alignment.centerLeft,
                                       child: Wrap(
                                         spacing: 8,
                                         children: [
-                                          TextButton.icon(
-                                            onPressed:
-                                                locked ||
-                                                    _loadingDrivers ||
-                                                    _driverError != null ||
-                                                    !_drivers.any(
-                                                      (driver) => !_recipients
-                                                          .containsKey(
-                                                            driver.userId,
-                                                          ),
-                                                    )
-                                                ? null
-                                                : _selectAllDrivers,
-                                            icon: const Icon(
-                                              Icons.groups_outlined,
+                                          if (!_findOffice)
+                                            TextButton.icon(
+                                              onPressed:
+                                                  locked ||
+                                                      _loadingDrivers ||
+                                                      _driverError != null ||
+                                                      !_drivers.any(
+                                                        (driver) => !_recipients
+                                                            .containsKey(
+                                                              driver.userId,
+                                                            ),
+                                                      )
+                                                  ? null
+                                                  : _selectAllDrivers,
+                                              icon: const Icon(
+                                                Icons.groups_outlined,
+                                              ),
+                                              label: const Text(
+                                                'Select all drivers',
+                                              ),
                                             ),
-                                            label: const Text(
-                                              'Select all drivers',
-                                            ),
-                                          ),
                                           TextButton.icon(
                                             onPressed:
                                                 locked || _recipients.isEmpty
@@ -531,15 +522,19 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
                                         ],
                                       ),
                                     ),
-                                    if (_driverError != null)
-                                      Text(_driverError!),
+                                    if (directoryError != null)
+                                      Text(directoryError),
                                     if (query.isNotEmpty &&
-                                        !_loadingDrivers &&
-                                        _driverError == null &&
+                                        !directoryLoading &&
+                                        directoryError == null &&
                                         results.isEmpty)
-                                      const Padding(
-                                        padding: EdgeInsets.all(12),
-                                        child: Text('No matching drivers.'),
+                                      Padding(
+                                        padding: const EdgeInsets.all(12),
+                                        child: Text(
+                                          _findOffice
+                                              ? 'No matching office staff in your department.'
+                                              : 'No matching drivers.',
+                                        ),
                                       ),
                                     if (results.length > 6)
                                       const Text(
@@ -589,7 +584,8 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
                                       alignment: Alignment.centerRight,
                                       child: FilledButton.icon(
                                         onPressed:
-                                          _sending || _selectingAll ||
+                                            _sending ||
+                                                _selectingAll ||
                                                 _recipients.isEmpty ||
                                                 !hasPhone ||
                                                 _message.text.trim().isEmpty
@@ -605,7 +601,7 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
                                               ? 'Working…'
                                               : _unconfirmed
                                               ? 'Check or retry same attempt'
-                                              : 'Review SMS',
+                                              : 'Send SMS',
                                         ),
                                       ),
                                     ),
@@ -668,11 +664,16 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
                                       if ((row['detail'] as String? ?? '')
                                           .isNotEmpty)
                                         '${row['detail']}',
+                                      if ((row['providerId'] as String? ?? '')
+                                          .isNotEmpty)
+                                        'Arkesel message ID: ${row['providerId']}',
                                     ].join('\n'),
                                   ),
                                   trailing: Chip(
                                     label: Text(switch (row['status']) {
                                       'accepted' => 'Accepted',
+                                      'delivered' => 'Delivered',
+                                      'not_delivered' => 'Not delivered',
                                       'preview' => 'Preview',
                                       'failed' => 'Failed',
                                       'unknown' => 'Unconfirmed',
@@ -700,6 +701,15 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
         ),
       ),
     );
+  }
+
+  void _setDirectory(bool office) {
+    if (_findOffice == office) return;
+    setState(() {
+      _findOffice = office;
+      _search.clear();
+    });
+    if (office && !_officeLoaded) _loadOfficeStaff();
   }
 
   Widget _recipientList(bool locked) {
@@ -759,11 +769,11 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
       keyboardType: TextInputType.phone,
       onChanged: (value) => setState(() => _phones[id] = value),
       decoration: InputDecoration(
-        labelText: 'Driver phone number',
+        labelText: driver.role == 'driver'
+            ? 'Driver phone number'
+            : 'Staff phone number',
         hintText: 'Enter a Ghana phone number',
-        helperText: missing
-            ? 'No number linked to this driver’s profile.'
-            : null,
+        helperText: missing ? 'No number linked to this profile.' : null,
         helperMaxLines: 2,
       ),
     );
@@ -829,8 +839,4 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
     final locale = MaterialLocalizations.of(context);
     return '${locale.formatShortDate(date)} ${locale.formatTimeOfDay(TimeOfDay.fromDateTime(date))}';
   }
-}
-
-class _SmsRejected extends StateError {
-  _SmsRejected(super.message);
 }

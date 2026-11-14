@@ -15,6 +15,7 @@ import '../services/firestore_waybill_service.dart';
 import '../services/settings_service.dart';
 import '../services/waybill_service.dart';
 import '../utils/platform_flags.dart';
+import '../widgets/super_user_test_sms_card.dart';
 import 'edit_waybill_screen.dart';
 import 'login_screen.dart';
 import 'waybill_details_screen.dart';
@@ -621,12 +622,12 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                           ),
                         ],
                         const SizedBox(height: 12),
-                        if (selectedRole == 'driver') ...[
+                        if (_canEditSmsPhone(selectedRole)) ...[
                           TextFormField(
                             controller: driverPhoneController,
                             keyboardType: TextInputType.phone,
                             decoration: const InputDecoration(
-                              labelText: 'Driver phone for SMS',
+                              labelText: 'Phone number for SMS',
                               border: OutlineInputBorder(),
                             ),
                           ),
@@ -713,7 +714,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                             final createdUser = await AppUserService.createUser(
                               fullName: fullNameController.text,
                               email: emailController.text,
-                              phoneNumber: selectedRole == 'driver'
+                              phoneNumber: _canEditSmsPhone(selectedRole)
                                   ? driverPhoneController.text
                                   : '',
                               password: passwordController.text,
@@ -2460,12 +2461,22 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     );
   }
 
-  Future<void> _editDriverPhone(AppUserModel user) async {
+  bool _canEditSmsPhone(String role) => const {
+    'driver',
+    'officer',
+    'officer in charge',
+    'manager',
+    'management',
+    'manager_officer',
+    'manager/officer',
+  }.contains(role.trim().toLowerCase());
+
+  Future<void> _editUserPhone(AppUserModel user) async {
     var phone = user.phoneNumber;
     final saved = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Driver phone for SMS'),
+        title: const Text('Phone number for SMS'),
         content: TextFormField(
           initialValue: phone,
           keyboardType: TextInputType.phone,
@@ -2486,7 +2497,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     );
     if (!mounted || saved != true) return;
     try {
-      await AppUserService.updateDriverPhone(user.userId, phone);
+      await AppUserService.updateUserPhone(user.userId, phone);
       if (!mounted) return;
       setState(() {
         final index = users.indexWhere((item) => item.userId == user.userId);
@@ -2496,11 +2507,11 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
       });
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Driver phone saved.')));
+      ).showSnackBar(const SnackBar(content: Text('Phone number saved.')));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not save the driver phone.')),
+        const SnackBar(content: Text('Could not save the phone number.')),
       );
     }
   }
@@ -2509,11 +2520,11 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     return Wrap(
       spacing: 8,
       children: [
-        if (user.role.trim().toLowerCase() == 'driver')
+        if (_canEditSmsPhone(user.role))
           IconButton(
-            onPressed: () => _editDriverPhone(user),
+            onPressed: () => _editUserPhone(user),
             icon: const Icon(Icons.phone_outlined),
-            tooltip: 'Edit driver phone',
+            tooltip: 'Edit phone number',
           ),
         IconButton(
           onPressed: () => _sendPasswordReset(user),
@@ -3015,6 +3026,10 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
             onTap: _showSmtpSettingsDialog,
           ),
         ),
+        if (const bool.fromEnvironment('BAJ_SMS_ALLOW_TEST')) ...[
+          const SizedBox(height: 12),
+          const SuperUserTestSmsCard(),
+        ],
         const SizedBox(height: 12),
         Card(
           child: ListTile(

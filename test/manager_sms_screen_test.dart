@@ -121,6 +121,13 @@ void main() {
       await tester.tap(find.text('Kwame Mensah'));
       await tester.pumpAndSettle();
       expect(tester.widget<TextField>(phone).controller!.text, '024 000 0000');
+      await tester.tap(find.text('Find Office Staff'));
+      await tester.pumpAndSettle();
+      expect(find.text('Search your department by name or phone'), findsOneWidget);
+      expect(find.text('Search driver by name or phone'), findsNothing);
+      expect(find.text('Recipients (1)'), findsOneWidget);
+      await tester.tap(find.text('Find Drivers'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Select all drivers'));
       await tester.pumpAndSettle();
       expect(tester.widget<TextField>(phone.last).controller!.text, isEmpty);
@@ -166,19 +173,14 @@ void main() {
           }
         });
       }
-      await tester.tap(find.text('Review SMS'));
+      await tester.tap(find.text('Send SMS'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Ama Boateng · 020 000 0000'), findsOneWidget);
-      expect(
-        find.textContaining('Kwame Mensah · 024 000 0000'),
-        findsOneWidget,
-      );
-      await tester.tap(find.text('Record preview'));
-      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
       await tester.tap(find.text('SMS History'));
       await tester.pumpAndSettle();
       expect(find.text('Preview'), findsNWidgets(2));
       expect(find.textContaining('Collect cargo at 9 AM.'), findsNWidgets(2));
+      expect(find.text('Send test SMS', skipOffstage: false), findsNothing);
     },
   );
 }
