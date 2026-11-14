@@ -15,7 +15,9 @@ import 'manager_sms_screen.dart';
 import 'waybill_details_screen.dart';
 
 class ManagerDashboard extends StatefulWidget {
-  const ManagerDashboard({super.key});
+  const ManagerDashboard({super.key, this.transportNavigation = false});
+
+  final bool transportNavigation;
 
   @override
   State<ManagerDashboard> createState() => _ManagerDashboardState();
@@ -31,6 +33,9 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
   String? openingCardKey;
   bool _showSms = false;
   bool _smsOpened = false;
+  bool _showFleet = false;
+  bool _showWaybills = false;
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   int get _totalCount => dashboardStats?.total ?? waybills.length;
 
@@ -207,10 +212,8 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isWideScreen = screenWidth > 900;
-    final isTablet = screenWidth >= 600 && !isWideScreen;
     final summaryColumns = isWideScreen ? 6 : 2;
     final isCompactSummary = !isWideScreen;
-    final summaryAspectRatio = isWideScreen ? 1.85 : (isTablet ? 2.45 : 1.72);
     final effectiveMyStats = myWaybillStats ?? WaybillStatsModel.empty();
     final effectiveUserStats = userStats ?? UserStatsModel.empty();
 
@@ -225,8 +228,9 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
           issueCount: effectiveMyStats.rejected,
           userStats: effectiveUserStats,
           onLogout: _logout,
+          showSummary: isWideScreen,
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: isWideScreen ? 16 : 8),
         Row(
           children: [
             FilledButton.icon(
@@ -236,14 +240,21 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: isWideScreen ? 12 : 6),
         GridView.count(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           crossAxisCount: summaryColumns,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: summaryAspectRatio,
+          crossAxisSpacing: isWideScreen ? 12 : 6,
+          mainAxisSpacing: isWideScreen ? 12 : 6,
+          childAspectRatio: 1.85,
+          mainAxisExtent: isWideScreen
+              ? null
+              : 52 +
+                    (MediaQuery.textScalerOf(context).scale(32) - 32).clamp(
+                      0,
+                      double.infinity,
+                    ),
           children: [
             _MetricCard(
               title: 'My Total',
@@ -301,7 +312,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
             ),
           ],
         ),
-        const SizedBox(height: 18),
+        SizedBox(height: isWideScreen ? 18 : 8),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -324,50 +335,52 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _CompanySummaryPill(
-              label: 'Total Waybills',
-              value: _totalCount,
-              isEmphasized: true,
-              isLoading: openingCardKey == 'total',
-              onTap: _openAllWaybills,
-            ),
-            _CompanySummaryPill(
-              label: 'Pending',
-              value: _pendingCount,
-              isLoading: openingCardKey == 'pending',
-              onTap: _openPendingWaybills,
-            ),
-            _CompanySummaryPill(
-              label: 'Delivered',
-              value: _deliveredCount,
-              isLoading: openingCardKey == 'delivered',
-              onTap: _openDeliveredWaybills,
-            ),
-            _CompanySummaryPill(
-              label: 'Sent',
-              value: _sentForInvoicingCount,
-              isLoading: openingCardKey == 'sent',
-              onTap: _openSentForInvoicingWaybills,
-            ),
-            _CompanySummaryPill(
-              label: 'Invoiced',
-              value: _invoicedCount,
-              isLoading: openingCardKey == 'invoiced',
-              onTap: _openInvoicedWaybills,
-            ),
-            _CompanySummaryPill(
-              label: 'Rejected',
-              value: _rejectedCount,
-              isLoading: openingCardKey == 'issues',
-              onTap: _openRejectedWaybills,
-            ),
-          ],
-        ),
+        if (isWideScreen) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _CompanySummaryPill(
+                label: 'Total Waybills',
+                value: _totalCount,
+                isEmphasized: true,
+                isLoading: openingCardKey == 'total',
+                onTap: _openAllWaybills,
+              ),
+              _CompanySummaryPill(
+                label: 'Pending',
+                value: _pendingCount,
+                isLoading: openingCardKey == 'pending',
+                onTap: _openPendingWaybills,
+              ),
+              _CompanySummaryPill(
+                label: 'Delivered',
+                value: _deliveredCount,
+                isLoading: openingCardKey == 'delivered',
+                onTap: _openDeliveredWaybills,
+              ),
+              _CompanySummaryPill(
+                label: 'Sent',
+                value: _sentForInvoicingCount,
+                isLoading: openingCardKey == 'sent',
+                onTap: _openSentForInvoicingWaybills,
+              ),
+              _CompanySummaryPill(
+                label: 'Invoiced',
+                value: _invoicedCount,
+                isLoading: openingCardKey == 'invoiced',
+                onTap: _openInvoicedWaybills,
+              ),
+              _CompanySummaryPill(
+                label: 'Rejected',
+                value: _rejectedCount,
+                isLoading: openingCardKey == 'issues',
+                onTap: _openRejectedWaybills,
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 18),
         LayoutBuilder(
           builder: (context, constraints) {
@@ -405,8 +418,51 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
     );
 
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: const Color(0xFFF4F7FB),
-      floatingActionButton: isWideScreen
+      appBar: widget.transportNavigation && !isWideScreen
+          ? AppBar(
+              backgroundColor: const Color(0xFFEAF3FF),
+              foregroundColor: const Color(0xFF123E6B),
+              surfaceTintColor: Colors.transparent,
+              titleSpacing: 8,
+              titleTextStyle: const TextStyle(
+                color: Color(0xFF123E6B),
+                fontSize: 19,
+                fontWeight: FontWeight.w700,
+              ),
+              shape: const Border(bottom: BorderSide(color: Color(0xFFD6E4F5))),
+              leading: Padding(
+                padding: const EdgeInsetsDirectional.only(start: 8),
+                child: Center(
+                  child: IconButton.filledTonal(
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).openAppDrawerTooltip,
+                    style: IconButton.styleFrom(
+                      backgroundColor: const Color(0xFFD9E9FC),
+                      foregroundColor: const Color(0xFF0F5FB8),
+                    ),
+                    onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+                    icon: const Icon(Icons.menu_rounded, size: 22),
+                  ),
+                ),
+              ),
+              title: Text(
+                _showWaybills
+                    ? 'Waybill Management'
+                    : _showFleet
+                    ? 'Fleet Management'
+                    : _showSms
+                    ? 'SMS Notifier'
+                    : 'Dashboard',
+              ),
+            )
+          : null,
+      drawer: widget.transportNavigation && !isWideScreen
+          ? Drawer(width: 250, child: _buildSidebar(context, inDrawer: true))
+          : null,
+      floatingActionButton: isWideScreen || widget.transportNavigation
           ? null
           : FloatingActionButton.small(
               onPressed: _openSms,
@@ -421,7 +477,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
               fit: StackFit.expand,
               children: [
                 Offstage(
-                  offstage: isWideScreen && _showSms,
+                  offstage: _showSms || _showFleet || _showWaybills,
                   child: SafeArea(
                     child: Padding(
                       padding: EdgeInsets.fromLTRB(
@@ -436,8 +492,40 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
                 ),
                 if (_smsOpened)
                   Offstage(
-                    offstage: !isWideScreen || !_showSms,
+                    offstage: !_showSms,
                     child: const ManagerSmsScreen(embedded: true),
+                  ),
+                if (_showWaybills)
+                  ManagerWaybillListScreen(
+                    title: 'Waybill Management',
+                    waybills: waybills,
+                    embedded: true,
+                  ),
+                if (_showFleet)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.local_shipping_outlined,
+                            size: 48,
+                            color: Color(0xFF0F5FB8),
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'Fleet Management',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text('Coming soon'),
+                        ],
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -448,10 +536,12 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
   }
 
   void _openSms() {
-    if (MediaQuery.sizeOf(context).width > 900) {
+    if (widget.transportNavigation || MediaQuery.sizeOf(context).width > 900) {
       setState(() {
         _smsOpened = true;
         _showSms = true;
+        _showFleet = false;
+        _showWaybills = false;
       });
       return;
     }
@@ -460,7 +550,12 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
     ).push(MaterialPageRoute<void>(builder: (_) => const ManagerSmsScreen()));
   }
 
-  Widget _buildSidebar(BuildContext context) {
+  Widget _buildSidebar(BuildContext context, {bool inDrawer = false}) {
+    void navigate(VoidCallback action) {
+      if (inDrawer) _scaffoldKey.currentState?.closeDrawer();
+      action();
+    }
+
     return Container(
       width: 214,
       decoration: const BoxDecoration(
@@ -471,91 +566,138 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F5FB8),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.manage_accounts,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    Row(
                       children: [
-                        Text(
-                          'BAJ E-POD',
-                          style: TextStyle(
-                            color: Color(0xFF0A467F),
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F5FB8),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.manage_accounts,
+                            color: Colors.white,
                           ),
                         ),
-                        Text(
-                          'Manager Desk',
-                          style: TextStyle(
-                            color: Color(0xFF5B718C),
-                            fontSize: 11,
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'BAJ E-POD',
+                                style: TextStyle(
+                                  color: Color(0xFF0A467F),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                'Manager Desk',
+                                style: TextStyle(
+                                  color: Color(0xFF5B718C),
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 28),
+                    _SidebarItem(
+                      icon: Icons.dashboard_customize,
+                      label: 'Dashboard',
+                      isActive: !_showSms && !_showFleet && !_showWaybills,
+                      onTap: () => navigate(
+                        () => setState(() {
+                          _showSms = false;
+                          _showFleet = false;
+                          _showWaybills = false;
+                        }),
+                      ),
+                    ),
+                    if (widget.transportNavigation) ...[
+                      _SidebarItem(
+                        icon: Icons.inventory_2_outlined,
+                        label: 'Waybill Management',
+                        isActive: _showWaybills,
+                        onTap: () => navigate(
+                          () => setState(() {
+                            _showWaybills = true;
+                            _showSms = false;
+                            _showFleet = false;
+                          }),
+                        ),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.local_shipping_outlined,
+                        label: 'Fleet Management',
+                        isActive: _showFleet,
+                        onTap: () => navigate(
+                          () => setState(() {
+                            _showFleet = true;
+                            _showSms = false;
+                            _showWaybills = false;
+                          }),
+                        ),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.sms_outlined,
+                        label: 'SMS Notifier',
+                        isActive: _showSms,
+                        onTap: () => navigate(_openSms),
+                      ),
+                    ],
+                    if (!widget.transportNavigation) ...[
+                      _SidebarItem(
+                        icon: Icons.inventory_2,
+                        label: 'My Waybills',
+                        onTap: () => navigate(_openMyWaybills),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.pending_actions,
+                        label: 'My Pending',
+                        onTap: () => navigate(_openMyPendingWaybills),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.local_shipping,
+                        label: 'My Delivered',
+                        onTap: () => navigate(_openMyDeliveredWaybills),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.done_all,
+                        label: 'My Invoiced',
+                        onTap: () => navigate(_openMyInvoicedWaybills),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.outbox_rounded,
+                        label: 'My Sent',
+                        onTap: () => navigate(_openMySentWaybills),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.report_problem,
+                        label: 'My Rejected',
+                        onTap: () => navigate(_openMyRejectedWaybills),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.sms_outlined,
+                        label: 'SMS',
+                        isActive: _showSms,
+                        onTap: _openSms,
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 28),
-              _SidebarItem(
-                icon: Icons.dashboard_customize,
-                label: 'Dashboard',
-                isActive: !_showSms,
-                onTap: () => setState(() => _showSms = false),
-              ),
-              _SidebarItem(
-                icon: Icons.inventory_2,
-                label: 'My Waybills',
-                onTap: _openMyWaybills,
-              ),
-              _SidebarItem(
-                icon: Icons.pending_actions,
-                label: 'My Pending',
-                onTap: _openMyPendingWaybills,
-              ),
-              _SidebarItem(
-                icon: Icons.local_shipping,
-                label: 'My Delivered',
-                onTap: _openMyDeliveredWaybills,
-              ),
-              _SidebarItem(
-                icon: Icons.done_all,
-                label: 'My Invoiced',
-                onTap: _openMyInvoicedWaybills,
-              ),
-              _SidebarItem(
-                icon: Icons.outbox_rounded,
-                label: 'My Sent',
-                onTap: _openMySentWaybills,
-              ),
-              _SidebarItem(
-                icon: Icons.report_problem,
-                label: 'My Rejected',
-                onTap: _openMyRejectedWaybills,
-              ),
-              _SidebarItem(
-                icon: Icons.sms_outlined,
-                label: 'SMS',
-                isActive: _showSms,
-                onTap: _openSms,
-              ),
-              const Spacer(),
+              const SizedBox(height: 16),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
@@ -817,6 +959,7 @@ class _SidebarItem extends StatelessWidget {
 class ManagerWaybillListScreen extends StatefulWidget {
   final String title;
   final List<WaybillModel> waybills;
+  final bool embedded;
   final String? serverStatusFilter;
   final String? serverInvoiceStatusFilter;
   final String? serverExceptionFilter;
@@ -826,6 +969,7 @@ class ManagerWaybillListScreen extends StatefulWidget {
     super.key,
     required this.title,
     required this.waybills,
+    this.embedded = false,
     this.serverStatusFilter,
     this.serverInvoiceStatusFilter,
     this.serverExceptionFilter,
@@ -947,6 +1091,14 @@ class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
     if (usesServerPagination) {
       _hasNextPage = widget.waybills.length >= _itemsPerPage;
       loadWaybillPage();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant ManagerWaybillListScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.embedded && oldWidget.waybills != widget.waybills) {
+      filterWaybills(searchController.text);
     }
   }
 
@@ -1264,8 +1416,6 @@ class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isWideScreen = MediaQuery.of(context).size.width > 850;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
       body: Padding(
@@ -1283,13 +1433,15 @@ class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
               ),
               child: Row(
                 children: [
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.arrow_back),
-                    tooltip: 'Back',
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  const SizedBox(width: 8),
+                  if (!widget.embedded) ...[
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.arrow_back),
+                      tooltip: 'Back',
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1378,9 +1530,12 @@ class _ManagerWaybillListScreenState extends State<ManagerWaybillListScreen> {
                   : Column(
                       children: [
                         Expanded(
-                          child: isWideScreen
-                              ? _buildTableView()
-                              : _buildCardList(),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) =>
+                                constraints.maxWidth > 824
+                                ? _buildTableView()
+                                : _buildCardList(),
+                          ),
                         ),
                         if (shouldPaginate) ...[
                           const SizedBox(height: 12),
@@ -1762,6 +1917,7 @@ class _ManagerHero extends StatelessWidget {
   final int issueCount;
   final UserStatsModel userStats;
   final VoidCallback onLogout;
+  final bool showSummary;
 
   const _ManagerHero({
     required this.managerName,
@@ -1771,6 +1927,7 @@ class _ManagerHero extends StatelessWidget {
     required this.issueCount,
     required this.userStats,
     required this.onLogout,
+    required this.showSummary,
   });
 
   @override
@@ -1864,6 +2021,8 @@ class _ManagerHero extends StatelessWidget {
               ],
             ],
           );
+
+          if (!showSummary) return header;
 
           final summary = Column(
             crossAxisAlignment: isCompact
@@ -2190,11 +2349,11 @@ class _MetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final padding = EdgeInsets.symmetric(
       horizontal: isCompact ? 8 : 10,
-      vertical: isCompact ? 8 : 8,
+      vertical: isCompact ? 4 : 8,
     );
-    final iconBoxSize = isCompact ? 34.0 : 36.0;
-    final iconSize = isCompact ? 18.0 : 20.0;
-    final valueFontSize = isCompact ? 18.0 : 19.0;
+    final iconBoxSize = isCompact ? 28.0 : 36.0;
+    final iconSize = isCompact ? 16.0 : 20.0;
+    final valueFontSize = isCompact ? 16.0 : 19.0;
     final titleFontSize = isCompact ? 11.0 : 12.0;
     final trailingIconSize = isCompact ? 18.0 : 24.0;
 

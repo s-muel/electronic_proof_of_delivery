@@ -121,9 +121,17 @@ void main() {
       await tester.tap(find.text('Kwame Mensah'));
       await tester.pumpAndSettle();
       expect(tester.widget<TextField>(phone).controller!.text, '024 000 0000');
+      final instructions = find.widgetWithText(TextField, 'Job instructions');
+      expect(
+        tester.widget<TextField>(instructions).controller!.text,
+        'Hello Kwame Mensah,\n\n',
+      );
       await tester.tap(find.text('Find Office Staff'));
       await tester.pumpAndSettle();
-      expect(find.text('Search your department by name or phone'), findsOneWidget);
+      expect(
+        find.text('Search your department by name or phone'),
+        findsOneWidget,
+      );
       expect(find.text('Search driver by name or phone'), findsNothing);
       expect(find.text('Recipients (1)'), findsOneWidget);
       await tester.tap(find.text('Find Drivers'));
@@ -136,7 +144,7 @@ void main() {
       await tester.enterText(phone.last, '020 000 0000');
       await tester.enterText(
         find.widgetWithText(TextField, 'Job instructions'),
-        'Collect cargo at 9 AM.',
+        'Hello Team,\n\nCollect cargo at 9 AM.',
       );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Unselect all drivers'));
@@ -151,7 +159,7 @@ void main() {
             )
             .controller!
             .text,
-        'Collect cargo at 9 AM.',
+        'Hello Team,\n\nCollect cargo at 9 AM.',
       );
       await tester.enterText(phone.last, '020 000 0000');
       await tester.pumpAndSettle();
@@ -178,8 +186,28 @@ void main() {
       expect(find.byType(AlertDialog), findsNothing);
       await tester.tap(find.text('SMS History'));
       await tester.pumpAndSettle();
-      expect(find.text('Preview'), findsNWidgets(2));
-      expect(find.textContaining('Collect cargo at 9 AM.'), findsNWidgets(2));
+      expect(find.text('Bulk SMS · 2 recipients'), findsOneWidget);
+      expect(find.text('Preview'), findsOneWidget);
+      expect(find.textContaining('Collect cargo at 9 AM.'), findsOneWidget);
+      expect(find.text('View'), findsOneWidget);
+      await tester.tap(find.text('View').first);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(
+        find.textContaining('Kwame Mensah · 024 000 0000 · Preview'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Ama Boateng · 020 000 0000 · Preview'),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.textContaining('Collect cargo at 9 AM.'),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('Send test SMS', skipOffstage: false), findsNothing);
     },
   );

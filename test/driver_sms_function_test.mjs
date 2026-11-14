@@ -1,14 +1,7 @@
 import { generateKeyPairSync } from 'node:crypto';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { acceptedProviderId, handler } from '../netlify/functions/driver-sms.mjs';
-
-test('accepts both Arkesel response shapes without matching another recipient', () => {
-  const phone = '233240000000';
-  assert.equal(acceptedProviderId({ id: 'message-1' }, phone), 'message-1');
-  assert.equal(acceptedProviderId([{ recipient: '0240000000', id: 'message-2' }], phone), 'message-2');
-  assert.equal(acceptedProviderId({ recipient: '0200000000', id: 'wrong' }, phone), '');
-});
+import { handler, runQueuedBatch } from '../netlify/functions/driver-sms.mjs';
 
 test('only manager-officers can record a preview, and a repeated request is not sent again', async (t) => {
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -26,26 +19,22 @@ test('only manager-officers can record a preview, and a repeated request is not 
   let writes = 0;
   let providerCalls = 0;
   let acceptSend = false;
-  let reportCalls = 0;
+  const queuedDocs = new Map();
+  let workerEvent;
   const doc = (data) => ({ fields: Object.fromEntries(Object.entries(data)
     .map(([key, value]) => [key, typeof value === 'boolean'
       ? { booleanValue: value } : { stringValue: value }])) });
   t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
     const address = new URL(url);
+    if (address.hostname === 'sms-worker.example') {
+      workerEvent = { httpMethod: 'POST', headers: options.headers, body: options.body };
+      return new Response(null, { status: 202 });
+    }
     if (address.hostname === 'identitytoolkit.googleapis.com') {
       return Response.json({ users: [{ localId: 'manager-1' }] });
     }
     if (address.hostname === 'oauth2.googleapis.com') {
       return Response.json({ access_token: 'admin' });
-    }
-    if (address.hostname === 'sms.arkesel.com' && address.pathname === '/api/v2/sms/message-reports') {
-      assert.equal(options.method, 'POST');
-      assert.deepEqual(JSON.parse(options.body), { msg_ids: ['message-1', 'missing'] });
-      reportCalls++;
-      return Response.json({ status: 'success', data: {
-        'message-1': { status: 'DELIVERED', recipient: '233200000000' },
-        missing: { status: 'error', response: 'message does not exist' },
-      } });
     }
     if (address.hostname === 'sms.arkesel.com' && process.env.BAJ_SMS_MODE === 'live') {
       providerCalls++;
@@ -58,10 +47,32 @@ test('only manager-officers can record a preview, and a repeated request is not 
         recipients: ['233200000000'],
         sandbox: false,
       });
-      if (acceptSend) return Response.json({ status: 'success', data: { id: 'message-1' } });
+      if (acceptSend) return new Response('unused response body', { status: 202 });
       throw new DOMException('Mock response timeout', 'TimeoutError');
     }
     assert.equal(address.hostname, 'firestore.googleapis.com', 'preview cannot contact Arkesel');
+    if (address.pathname.endsWith(':commit')) {
+      for (const { update } of JSON.parse(options.body).writes) {
+        queuedDocs.set(update.name.split('/documents/')[1], update);
+      }
+      return Response.json({});
+    }
+    const path = address.pathname.split('/documents/')[1];
+    if (queuedDocs.has(path)) {
+      const current = queuedDocs.get(path);
+      if (options.method === 'PATCH') {
+        const next = JSON.parse(options.body);
+        if (address.searchParams.has('currentDocument.updateTime')) {
+          assert.equal(address.searchParams.get('currentDocument.updateTime'), '2026-01-01T00:00:00Z');
+          current.fields.status = next.fields.status;
+        } else {
+          queuedDocs.set(path, next);
+        }
+        return Response.json({});
+      }
+      return Response.json({ ...current, updateTime: '2026-01-01T00:00:00Z' });
+    }
+    if (path?.includes('/driverSmsBatches/')) return new Response(null, { status: 404 });
     if (address.pathname.endsWith('/users/manager-1')) {
       return Response.json(doc({ role, isActive: true, fullName: 'Test Manager', department: 'Transport' }));
     }
@@ -130,23 +141,23 @@ test('only manager-officers can record a preview, and a repeated request is not 
   }) };
   const timedOut = JSON.parse((await handler(live)).body).record;
   assert.equal(timedOut.status, 'unknown');
-  assert.match(timedOut.detail, /did not respond in time/);
+  assert.equal(timedOut.httpStatus, undefined);
   assert.equal(JSON.parse((await handler(live)).body).record.status, 'unknown');
   assert.equal(providerCalls, 1);
   const history = await handler({ ...event, httpMethod: 'GET' });
   assert.equal(history.statusCode, 200);
   const records = JSON.parse(history.body).records;
-  assert.deepEqual(records.map((r) => r.status), ['delivered', 'unknown', 'accepted']);
-  assert.match(records[2].detail, /no report for this message ID/);
-  assert.equal(reportCalls, 1);
+  assert.deepEqual(records.map((r) => r.status), ['accepted', 'unknown', 'accepted']);
   assert.equal(providerCalls, 1);
   saved = undefined;
   acceptSend = true;
   const accepted = JSON.parse((await handler({ ...live, body: JSON.stringify({
     ...JSON.parse(live.body), requestId: 'd'.repeat(32),
   }) })).body).record;
-  assert.equal(accepted.status, 'accepted');
-  assert.equal(accepted.providerId, 'message-1');
+  assert.equal(accepted.status, undefined);
+  assert.equal(accepted.httpStatus, '202');
+  assert.equal(accepted.providerId, undefined);
+  assert.equal(accepted.detail, undefined);
   assert.equal(providerCalls, 2);
   const direct = { ...event, body: JSON.stringify({
     testSms: 'true', requestId: 'e'.repeat(32), phone: '0240000000', message: 'Direct test',
@@ -176,4 +187,23 @@ test('only manager-officers can record a preview, and a repeated request is not 
   assert.equal(officeRecord.recipientType, 'office');
   assert.equal(officeRecord.recipientId, 'office-1');
   assert.equal(officeRecord.status, 'preview');
+  saved = undefined;
+  process.env.BAJ_SMS_MODE = 'live';
+  process.env.BAJ_SMS_WORKER_LOCAL_URL = 'https://sms-worker.example';
+  const batch = { ...event, body: JSON.stringify({
+    action: 'queue', batchId: '8'.repeat(32), message: 'Collect the cargo at 9 AM.',
+    recipients: [{ driverId: 'driver-1', requestId: '9'.repeat(32), phone: '0200000000' }],
+  }) };
+  const countBeforeQueue = providerCalls;
+  const queued = await handler(batch);
+  assert.equal(queued.statusCode, 200);
+  assert.equal(JSON.parse(queued.body).records[0].status, 'queued');
+  assert.equal(providerCalls, countBeforeQueue);
+  await runQueuedBatch({ ...workerEvent, headers: { 'x-baj-sms-signature': '0'.repeat(64) } });
+  assert.equal(providerCalls, countBeforeQueue);
+  await runQueuedBatch(workerEvent);
+  await runQueuedBatch(workerEvent);
+  const retried = await handler(batch);
+  assert.equal(JSON.parse(retried.body).records[0].httpStatus, '202');
+  assert.equal(providerCalls, countBeforeQueue + 1);
 });

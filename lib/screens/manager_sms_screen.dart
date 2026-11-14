@@ -36,12 +36,43 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
   );
 
   final _search = TextEditingController();
+  final _historySearch = TextEditingController();
+  DateTime? _historyMonth;
   bool _findOffice = false;
   List<AppUserModel> _officeStaff = [];
   bool _loadingOffice = false;
   bool _officeLoaded = false;
   String? _officeError;
   final _message = TextEditingController();
+  String _greeting = '';
+
+  String get _instructions {
+    final text = _message.text;
+    return (_greeting.isNotEmpty && text.startsWith(_greeting)
+            ? text.substring(_greeting.length)
+            : text)
+        .trim();
+  }
+
+  void _updateGreeting() {
+    final next = switch (_recipients.length) {
+      0 => '',
+      1 => 'Hello ${_recipients.values.single.fullName.trim()},\n\n',
+      _ => 'Hello Team,\n\n',
+    };
+    if (next == _greeting) return;
+    final text = _message.text;
+    final body = _greeting.isNotEmpty && text.startsWith(_greeting)
+        ? text.substring(_greeting.length)
+        : text;
+    _greeting = next;
+    final draft = next + body;
+    _message.value = TextEditingValue(
+      text: draft,
+      selection: TextSelection.collapsed(offset: draft.length),
+    );
+  }
+
   final _recipientScroll = ScrollController();
   final _recipients = <String, AppUserModel>{};
   final _phones = <String, String>{};
@@ -69,6 +100,7 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
   @override
   void dispose() {
     _search.dispose();
+    _historySearch.dispose();
     _message.dispose();
     _recipientScroll.dispose();
     super.dispose();
@@ -107,6 +139,7 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
             _recipients[id] = staff;
           }
         }
+        _updateGreeting();
       });
     } catch (error) {
       if (mounted) setState(() => _officeError = _error(error));
@@ -144,6 +177,7 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
             _recipients[id] = refreshed;
           }
         }
+        _updateGreeting();
       });
     } catch (error) {
       if (mounted) setState(() => _driverError = _error(error));
@@ -168,19 +202,6 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
         if (_sending) return;
         _history = more ? [..._history, ...records] : records;
         _cursor = page['cursor'] as String?;
-        final found = _history.map((r) => r['requestId']).toSet();
-        final resolved = _retry.keys
-            .where((id) => found.contains(_retry[id]!['requestId']))
-            .toList();
-        for (final id in resolved) {
-          _retry.remove(id);
-          _recipients.remove(id);
-          _phones.remove(id);
-        }
-        if (resolved.isNotEmpty) {
-          _result = 'Found ${resolved.length} attempt(s) in SMS history.';
-          if (_recipients.isEmpty) _message.clear();
-        }
       });
     } catch (error) {
       if (mounted) setState(() => _historyError = _error(error));
@@ -193,6 +214,7 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
     setState(() {
       _recipients[driver.userId] = driver;
       _phones[driver.userId] = driver.phoneNumber;
+      _updateGreeting();
       _search.clear();
       _result = '';
     });
@@ -210,6 +232,7 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
           _recipients.putIfAbsent(driver.userId, () => driver);
           _phones.putIfAbsent(driver.userId, () => driver.phoneNumber);
         }
+        _updateGreeting();
         _search.clear();
         _result = '';
       });
@@ -222,7 +245,7 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
     final message = _message.text.trim();
     if (_sending ||
         _selectingAll ||
-        message.isEmpty ||
+        _instructions.isEmpty ||
         message.length > 480 ||
         _recipients.isEmpty ||
         _recipients.keys.any((id) => _phones[id]!.trim().isEmpty)) {
@@ -232,12 +255,15 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
     try {
       if (!_unconfirmed) {
         final rng = Random.secure();
+        String newId() => List.generate(
+          16,
+          (_) => rng.nextInt(256).toRadixString(16).padLeft(2, '0'),
+        ).join();
+        final batchId = newId();
         for (final id in _recipients.keys) {
           _retry[id] = {
-            'requestId': List.generate(
-              16,
-              (_) => rng.nextInt(256).toRadixString(16).padLeft(2, '0'),
-            ).join(),
+            'requestId': newId(),
+            'batchId': batchId,
             'driverId': id,
             if (_recipients[id]!.role != 'driver') 'recipientType': 'office',
             'phone': _phones[id]!.trim(),
@@ -246,59 +272,123 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
         }
       }
 
-      var recorded = 0;
-      final rejected = <String>[];
-      final unconfirmedReasons = <String>{};
-      for (final entry in _retry.entries.toList()) {
-        final driverName = _recipients[entry.key]!.fullName;
-        final data = entry.value;
-        try {
-          final record = _preview
-              ? <String, dynamic>{
-                  ...data,
-                  'driverName': driverName,
-                  'senderName': 'Preview manager',
-                  'status': 'preview',
-                  'createdAt': DateTime.now().toIso8601String(),
-                  'detail': 'Recorded in preview mode. No SMS was sent.',
-                }
-              : (await DriverSmsService.request(data: data))['record']
-                    as Map<String, dynamic>;
-          if (!mounted) return;
-          setState(() {
-            _retry.remove(entry.key);
-            _recipients.remove(entry.key);
-            _phones.remove(entry.key);
-            _history = [
-              record,
-              ..._history.where((r) => r['requestId'] != data['requestId']),
-            ];
-          });
-          recorded++;
-        } on SmsRejected catch (error) {
-          if (!mounted) return;
-          _retry.remove(entry.key);
-          rejected.add('$driverName: ${error.message}');
-        } catch (error) {
-          if (!mounted) return;
-          // Keep the original request ID so a retry cannot send it twice.
-          unconfirmedReasons.add(_error(error));
-        }
+      if (!_preview) {
+        await _queueSms();
+        return;
       }
-      if (!mounted) return;
+
       setState(() {
-        _result = [
-          if (recorded > 0)
-            '$recorded attempt(s) recorded. See SMS history for each result.',
-          ...rejected,
-          if (_unconfirmed)
-            '${_retry.length} attempt(s) could not be confirmed. Retry checks only those attempts.',
-          ...unconfirmedReasons,
-        ].join('\n');
-        if (_recipients.isEmpty) _message.clear();
+        _history = [
+          for (final entry in _retry.entries)
+            {
+              ...entry.value,
+              'driverName': _recipients[entry.key]!.fullName,
+              'senderName': 'Preview manager',
+              'status': 'preview',
+              'createdAt': DateTime.now().toIso8601String(),
+            },
+          ..._history,
+        ];
+        _retry.clear();
+        _recipients.clear();
+        _phones.clear();
+        _message.clear();
+        _greeting = '';
+        _result = 'Preview saved. No SMS was sent.';
       });
     } finally {
       if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _queueSms() async {
+    final messenger = ScaffoldMessenger.of(context);
+    void showResult(String message) {
+      if (!messenger.mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(message)));
+    }
+
+    showResult('Sending SMS…');
+    final entries = _retry.values.toList(growable: false);
+    final first = entries.first;
+    try {
+      final response = await DriverSmsService.request(
+        data: {
+          'action': 'queue',
+          'batchId': first['batchId'],
+          'message': first['message'],
+          'recipients': [
+            for (final entry in entries)
+              {
+                'requestId': entry['requestId'],
+                'driverId': entry['driverId'],
+                'phone': entry['phone'],
+                if (entry.containsKey('recipientType'))
+                  'recipientType': entry['recipientType'],
+              },
+          ],
+        },
+      );
+      final records = (response['records'] as List)
+          .cast<Map<String, dynamic>>();
+      final ids = records.map((row) => row['requestId']).toSet();
+      final queued = records
+          .where(
+            (row) => row['status'] == 'queued' || row['status'] == 'processing',
+          )
+          .length;
+      final previews = records
+          .where((row) => row['status'] == 'preview')
+          .length;
+      final failed = records.where((row) => row['status'] == 'failed').length;
+      final submitted =
+          queued +
+          records
+              .where(
+                (row) => [
+                  'accepted',
+                  'delivered',
+                ].contains(DriverSmsService.displayStatus(row)),
+              )
+              .length;
+      final feedback = [
+        if (submitted > 0)
+          submitted == 1 ? 'Message sent.' : '$submitted messages sent.',
+        if (previews > 0) 'Preview saved. No SMS was sent.',
+        if (failed > 0)
+          failed == 1
+              ? 'Message could not be sent.'
+              : '$failed messages could not be sent.',
+        if (submitted + previews + failed < records.length)
+          'Check SMS History for unconfirmed messages.',
+      ].join('\n');
+      if (feedback.isNotEmpty) showResult(feedback);
+      if (!mounted) return;
+      setState(() {
+        _history = [
+          ...records,
+          ..._history.where((row) => !ids.contains(row['requestId'])),
+        ];
+        _retry.clear();
+        _recipients.clear();
+        _phones.clear();
+        _message.clear();
+        _greeting = '';
+        _result = '';
+      });
+    } on SmsRejected catch (error) {
+      showResult(error.message);
+      if (!mounted) return;
+      setState(() {
+        _retry.clear();
+        _result = error.message;
+      });
+    } catch (error) {
+      showResult('Send could not be confirmed. Check SMS History.');
+      if (!mounted) return;
+      setState(() {
+        _result = '${_error(error)} Retry the same batch to avoid duplicates.';
+      });
     }
   }
 
@@ -389,7 +479,12 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
               child: Column(
                 children: [
                   TabBar(
-                    onTap: (index) => setState(() => _tab = index),
+                    onTap: (index) {
+                      setState(() => _tab = index);
+                      if (index == 1 && !_loadingHistory && !_sending) {
+                        _loadHistory();
+                      }
+                    },
                     tabs: const [
                       Tab(text: 'Compose'),
                       Tab(text: 'SMS History'),
@@ -511,6 +606,7 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
                                                 : () => setState(() {
                                                     _recipients.clear();
                                                     _phones.clear();
+                                                    _updateGreeting();
                                                     _search.clear();
                                                     _result = '';
                                                   }),
@@ -588,7 +684,9 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
                                                 _selectingAll ||
                                                 _recipients.isEmpty ||
                                                 !hasPhone ||
-                                                _message.text.trim().isEmpty
+                                                _instructions.isEmpty ||
+                                                _message.text.trim().length >
+                                                    480
                                             ? null
                                             : _send,
                                         icon: Icon(
@@ -598,9 +696,9 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
                                         ),
                                         label: Text(
                                           _sending
-                                              ? 'Working…'
+                                              ? 'Queueing…'
                                               : _unconfirmed
-                                              ? 'Check or retry same attempt'
+                                              ? 'Retry same batch'
                                               : 'Send SMS',
                                         ),
                                       ),
@@ -616,79 +714,43 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
                             ),
                           ],
                         ),
-                        ListView(
-                          padding: const EdgeInsets.all(20),
+                        Column(
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'SMS history',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleLarge,
-                                  ),
-                                ),
-                                IconButton(
-                                  tooltip: 'Refresh history',
-                                  icon: const Icon(Icons.refresh),
-                                  onPressed: _loadingHistory || _sending
-                                      ? null
-                                      : _loadHistory,
-                                ),
-                              ],
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                              child: _historyFilters(),
                             ),
-                            const Text(
-                              'Messages sent or attempted from your account.',
-                            ),
-                            if (_loadingHistory)
-                              const LinearProgressIndicator(),
-                            if (_historyError != null) Text(_historyError!),
-                            if (!_loadingHistory &&
-                                _historyError == null &&
-                                _history.isEmpty)
-                              const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: Text('No SMS attempts yet.'),
-                              ),
-                            for (final row in _history)
-                              Card(
-                                child: ListTile(
-                                  title: Text(
-                                    '${row['driverName']} · ${row['phone']}',
-                                  ),
-                                  subtitle: Text(
-                                    [
-                                      '${row['message']}',
-                                      '${row['senderName']} · ${_date(context, row['createdAt'])}',
-                                      if ((row['detail'] as String? ?? '')
-                                          .isNotEmpty)
-                                        '${row['detail']}',
-                                      if ((row['providerId'] as String? ?? '')
-                                          .isNotEmpty)
-                                        'Arkesel message ID: ${row['providerId']}',
-                                    ].join('\n'),
-                                  ),
-                                  trailing: Chip(
-                                    label: Text(switch (row['status']) {
-                                      'accepted' => 'Accepted',
-                                      'delivered' => 'Delivered',
-                                      'not_delivered' => 'Not delivered',
-                                      'preview' => 'Preview',
-                                      'failed' => 'Failed',
-                                      'unknown' => 'Unconfirmed',
-                                      _ => 'Pending',
-                                    }),
-                                  ),
+                            Expanded(
+                              child: ListView(
+                                padding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  0,
+                                  20,
+                                  20,
                                 ),
+                                children: [
+                                  if (_loadingHistory)
+                                    const LinearProgressIndicator(),
+                                  if (_historyError != null)
+                                    Text(_historyError!),
+                                  if (!_loadingHistory &&
+                                      _historyError == null &&
+                                      _history.isEmpty)
+                                    const Padding(
+                                      padding: EdgeInsets.all(12),
+                                      child: Text('No SMS attempts yet.'),
+                                    ),
+                                  if (_history.isNotEmpty) _historyCards(),
+                                  if (_cursor != null)
+                                    TextButton(
+                                      onPressed: _loadingHistory || _sending
+                                          ? null
+                                          : () => _loadHistory(more: true),
+                                      child: const Text('Load older messages'),
+                                    ),
+                                ],
                               ),
-                            if (_cursor != null)
-                              TextButton(
-                                onPressed: _loadingHistory || _sending
-                                    ? null
-                                    : () => _loadHistory(more: true),
-                                child: const Text('Load older messages'),
-                              ),
+                            ),
                           ],
                         ),
                       ],
@@ -699,6 +761,291 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  String _historyStatus(Object? status) => switch (status) {
+    'queued' => 'Queued',
+    'processing' => 'Sending',
+    'accepted' => 'Sent',
+    'delivered' => 'Delivered',
+    'not_delivered' => 'Not delivered',
+    'preview' => 'Preview',
+    'failed' => 'Failed',
+    'unknown' => 'Unconfirmed',
+    _ => 'Pending',
+  };
+
+  Widget _historyFilters() {
+    final now = DateTime.now();
+    final months = <DateTime>{
+      for (var i = 0; i < 12; i++) DateTime(now.year, now.month - i),
+      ?_historyMonth,
+      for (final row in _history)
+        if (DateTime.tryParse('${row['createdAt']}')?.toLocal()
+            case final DateTime date)
+          DateTime(date.year, date.month),
+    }.toList()..sort((a, b) => b.compareTo(a));
+    final title = Text(
+      'SMS History',
+      style: Theme.of(context).textTheme.titleLarge,
+    );
+    Widget search({bool compact = false}) => TextField(
+      controller: _historySearch,
+      onChanged: (_) => setState(() {}),
+      decoration: InputDecoration(
+        labelText: compact ? 'Recipient name' : 'Search recipient name',
+        prefixIcon: const Icon(Icons.search, size: 18),
+        prefixIconConstraints: compact
+            ? const BoxConstraints(minWidth: 32)
+            : null,
+      ),
+    );
+    Widget filter({bool compact = false}) => DropdownButtonFormField<DateTime?>(
+      initialValue: _historyMonth,
+      isExpanded: true,
+      borderRadius: BorderRadius.circular(10),
+      icon: const Icon(Icons.expand_more, color: _blue, size: 20),
+      style: Theme.of(
+        context,
+      ).textTheme.bodySmall?.copyWith(color: _ink, fontWeight: FontWeight.w600),
+      decoration: InputDecoration(
+        labelText: 'Month',
+        filled: true,
+        fillColor: _surface,
+        prefixIcon: compact
+            ? null
+            : const Icon(Icons.calendar_month_outlined, color: _blue, size: 17),
+        prefixIconConstraints: const BoxConstraints(minWidth: 34),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: 10,
+        ),
+      ),
+      items: [
+        const DropdownMenuItem(value: null, child: Text('All months')),
+        for (final month in months)
+          DropdownMenuItem(
+            value: month,
+            child: Text(
+              MaterialLocalizations.of(context).formatMonthYear(month),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+      ],
+      onChanged: (month) => setState(() => _historyMonth = month),
+    );
+    Widget refresh({bool compact = false}) => IconButton(
+      tooltip: 'Refresh history',
+      icon: Icon(Icons.refresh, size: compact ? 18 : 24),
+      visualDensity: compact ? VisualDensity.compact : null,
+      onPressed: _loadingHistory || _sending ? null : _loadHistory,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth >= 620) {
+              return Row(
+                children: [
+                  title,
+                  const SizedBox(width: 20),
+                  Expanded(child: search()),
+                  const SizedBox(width: 10),
+                  SizedBox(width: 200, child: filter()),
+                  refresh(),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(flex: 3, child: search(compact: true)),
+                const SizedBox(width: 8),
+                Expanded(flex: 2, child: filter(compact: true)),
+                refresh(compact: true),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 8),
+        const Text('Messages sent or attempted from your account.'),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
+
+  Widget _historyCards() {
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (final row in _history) {
+      final batchId = row['batchId']?.toString() ?? '';
+      final key = batchId.isEmpty
+          ? 'single:${row['requestId']}'
+          : 'batch:$batchId';
+      (groups[key] ??= []).add(row);
+    }
+    final terms = _historySearch.text.trim().toLowerCase().split(
+      RegExp(r'\s+'),
+    );
+    final visible = groups.values.where((group) {
+      final date = DateTime.tryParse('${group.first['createdAt']}')?.toLocal();
+      final month = _historyMonth;
+      if (month != null &&
+          (date?.month != month.month || date?.year != month.year)) {
+        return false;
+      }
+      return group.any(
+        (row) => terms.every(
+          (term) => '${row['driverName'] ?? ''}'.toLowerCase().contains(term),
+        ),
+      );
+    }).toList();
+    if (visible.isEmpty) return const Text('No messages match these filters.');
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const gap = 12.0;
+        final columns = constraints.maxWidth >= 780
+            ? 3
+            : constraints.maxWidth >= 500
+            ? 2
+            : 1;
+        final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final group in visible)
+              SizedBox(
+                width: width,
+                child: Card(
+                  margin: EdgeInsets.zero,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          group.length == 1
+                              ? '${group.first['driverName']}'
+                              : 'Bulk SMS · ${group.length} recipients',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        Text(
+                          _date(context, group.first['createdAt']),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(Icons.sms_outlined, size: 16),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                '${group.first['message']}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Flexible(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (group.every(
+                                    (row) => ['accepted', 'delivered'].contains(
+                                      DriverSmsService.displayStatus(row),
+                                    ),
+                                  )) ...[
+                                    const Icon(
+                                      Icons.check_circle_outline,
+                                      color: Color(0xFF18764A),
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 5),
+                                  ],
+                                  Flexible(
+                                    child: Text(
+                                      _groupStatus(group),
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.labelMedium,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: () =>
+                                  _viewHistoryMessage(context, group),
+                              icon: const Icon(
+                                Icons.visibility_outlined,
+                                size: 16,
+                              ),
+                              label: const Text('View'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _groupStatus(List<Map<String, dynamic>> group) {
+    final counts = <String, int>{};
+    for (final row in group) {
+      final label = _historyStatus(DriverSmsService.displayStatus(row));
+      counts.update(label, (value) => value + 1, ifAbsent: () => 1);
+    }
+    if (counts.length == 1) return counts.keys.single;
+    return counts.entries
+        .map((e) => '${e.value} ${e.key.toLowerCase()}')
+        .join(' · ');
+  }
+
+  Future<void> _viewHistoryMessage(
+    BuildContext context,
+    List<Map<String, dynamic>> group,
+  ) {
+    final row = group.first;
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(group.length == 1 ? '${row['driverName']}' : 'Bulk SMS'),
+        content: SingleChildScrollView(
+          child: SelectableText(
+            [
+              '${row['senderName']} · ${_date(context, row['createdAt'])}',
+              '',
+              '${row['message']}',
+              '',
+              for (final recipient in group)
+                '${recipient['driverName']} · ${recipient['phone']} · '
+                    '${_historyStatus(DriverSmsService.displayStatus(recipient))}',
+            ].join('\n'),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
       ),
     );
   }
@@ -784,6 +1131,7 @@ class _ManagerSmsScreenState extends State<ManagerSmsScreen> {
           : () => setState(() {
               _recipients.remove(id);
               _phones.remove(id);
+              _updateGreeting();
             }),
       icon: const Icon(Icons.close),
     );

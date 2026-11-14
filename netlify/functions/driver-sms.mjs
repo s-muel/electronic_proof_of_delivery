@@ -1,4 +1,4 @@
-import { createSign } from 'node:crypto';
+import { createHmac, createSign, timingSafeEqual } from 'node:crypto';
 
 const project = 'bajfreight-system';
 const root = `https://firestore.googleapis.com/v1/projects/${project}/databases/(default)/documents`;
@@ -30,6 +30,101 @@ const document = (data) => JSON.stringify({
   fields: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, { stringValue: v }])),
 });
 const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+const idPattern = /^[a-f0-9]{32}$/;
+const database = `projects/${project}/databases/(default)/documents`;
+
+async function inChunks(items, size, action) {
+  const results = [];
+  for (let i = 0; i < items.length; i += size) {
+    results.push(...await Promise.all(items.slice(i, i + size).map(action)));
+  }
+  return results;
+}
+
+function workerSignature(body) {
+  const account = JSON.parse(process.env.BAJ_SMS_SERVICE_ACCOUNT_JSON || '{}');
+  return createHmac('sha256', account.private_key)
+    .update('baj-sms-worker-v1\n').update(body).digest();
+}
+
+async function dispatchBatch(uid, batchId, ids) {
+  const origin = process.env.BAJ_SMS_WORKER_LOCAL_URL || process.env.DEPLOY_URL || process.env.URL;
+  if (!origin) throw Error('SMS worker URL is unavailable');
+  const body = JSON.stringify({ uid, batchId, ids, issuedAt: Date.now() });
+  const response = await fetchBounded(new URL('/.netlify/functions/driver-sms-background', origin), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-baj-sms-signature': workerSignature(body).toString('hex') },
+    body,
+  }, 8000);
+  if (response.status !== 202) throw Error('SMS worker did not accept the batch');
+}
+
+async function queueBatch(payload, uid, profile, collection, admin) {
+  const { batchId, recipients } = payload;
+  const message = typeof payload.message === 'string' ? payload.message.trim() : '';
+  if (!idPattern.test(batchId || '') || !Array.isArray(recipients) ||
+      !recipients.length || recipients.length > 200 || !message || message.length > 480 ||
+      recipients.some((r) => !r || !idPattern.test(r.requestId || '') ||
+        !/^[\w-]{1,128}$/.test(r.driverId || '') || !normalizePhone(r.phone)) ||
+      new Set(recipients.map((r) => r.requestId)).size !== recipients.length ||
+      new Set(recipients.map((r) => r.driverId)).size !== recipients.length) {
+    return json(400, { error: 'Choose up to 200 recipients with valid Ghana numbers and enter a message.' });
+  }
+  const batchPath = `users/${encodeURIComponent(uid)}/driverSmsBatches/${batchId}`;
+  const fingerprint = createHmac('sha256', batchId)
+    .update(JSON.stringify({ message, recipients })).digest('hex');
+  const existing = await read(batchPath, admin);
+  if (existing && existing.fingerprint !== fingerprint) {
+    return json(409, { error: 'This batch ID was already used for a different message.' });
+  }
+  const loadRecords = () => inChunks(recipients, 20, (r) => read(`${collection}/${r.requestId}`, admin));
+  let records;
+  if (existing) {
+    records = await loadRecords();
+  } else {
+    const createdAt = new Date().toISOString();
+    const preview = process.env.BAJ_SMS_MODE !== 'live';
+    records = await inChunks(recipients, 20, async (r) => {
+      const member = await read(`users/${encodeURIComponent(r.driverId)}`, admin);
+      const office = r.recipientType === 'office';
+      const phone = normalizePhone(r.phone);
+      const saved = String(member?.phoneNumber ?? '').trim();
+      const eligible = office ? r.driverId !== uid && isOfficePeer(member, profile)
+        : member?.role === 'driver' && member.isActive !== false;
+      return {
+        requestId: r.requestId, batchId, senderId: uid,
+        senderName: String(profile.fullName || uid),
+        driverId: office ? '' : r.driverId, recipientId: r.driverId,
+        recipientType: office ? 'office' : 'driver',
+        driverName: String(member?.fullName || 'Recipient'), phone, message, createdAt,
+        status: !eligible || (saved && normalizePhone(saved) !== phone) ? 'failed' : preview ? 'preview' : 'queued',
+      };
+    });
+    const create = (path, data) => ({
+      update: { name: `${database}/${path}`, ...JSON.parse(document(data)) },
+      currentDocument: { exists: false },
+    });
+    const response = await fetchBounded(`${root}:commit`, {
+      method: 'POST',
+      headers: { ...auth(admin), 'content-type': 'application/json' },
+      body: JSON.stringify({ writes: [
+        create(batchPath, { fingerprint, createdAt }),
+        ...records.map((record) => create(`${collection}/${record.requestId}`, record)),
+      ] }),
+    });
+    if (!response.ok) {
+      const raced = await read(batchPath, admin);
+      if (raced?.fingerprint !== fingerprint) throw Error('Could not save SMS batch');
+      records = await loadRecords();
+    }
+  }
+  if (records.some((record) => !record || record.batchId !== batchId)) {
+    throw Error('SMS batch history is incomplete');
+  }
+  const queued = records.filter((record) => record.status === 'queued');
+  if (queued.length) await dispatchBatch(uid, batchId, queued.map((record) => record.requestId));
+  return json(200, { records });
+}
 
 export function normalizePhone(value) {
   if (!/^[+\d\s().-]+$/.test(String(value || ''))) return '';
@@ -37,68 +132,6 @@ export function normalizePhone(value) {
   if (/^0\d{9}$/.test(digits)) digits = '233' + digits.slice(1);
   else if (/^\d{9}$/.test(digits)) digits = '233' + digits;
   return /^233\d{9}$/.test(digits) ? digits : '';
-}
-
-export function acceptedProviderId(data, phone) {
-  const item = Array.isArray(data)
-    ? data.find((entry) => normalizePhone(entry?.recipient) === phone)
-    : data;
-  if (item?.recipient != null && normalizePhone(item.recipient) !== phone) return '';
-  return typeof item?.id === 'string' ? item.id.trim() : '';
-}
-
-async function deliveryReports(records, apiKey) {
-  const eligible = (record) => record.status === 'accepted' && Boolean(record.providerId);
-  const ids = [...new Set(records.filter(eligible).map((record) => record.providerId))];
-  if (!ids.length) return records;
-  const unavailable = (record, reason) => ({
-    ...record, detail: `Accepted by Arkesel. Delivery status unavailable: ${reason}.`,
-  });
-  const unavailableForAll = (reason) =>
-    records.map((record) => eligible(record) ? unavailable(record, reason) : record);
-  if (!apiKey) return unavailableForAll('BAJ Arkesel API key is not configured');
-  let reports;
-  try {
-    const response = await fetchBounded(
-      'https://sms.arkesel.com/api/v2/sms/message-reports',
-      {
-        method: 'POST',
-        headers: { 'api-key': apiKey, 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ msg_ids: ids }),
-      },
-    );
-    if (!response.ok) return unavailableForAll(`Arkesel report request returned HTTP ${response.status}`);
-    const report = await response.json();
-    if (report?.status !== 'success' || !report.data || typeof report.data !== 'object') {
-      return unavailableForAll('Arkesel did not return a usable report');
-    }
-    reports = report.data;
-  } catch {
-    return unavailableForAll('could not read the Arkesel delivery report');
-  }
-  return records.map((record) => {
-    if (!eligible(record)) return record;
-    const data = Object.hasOwn(reports, record.providerId) ? reports[record.providerId] : null;
-    if (!data || data.status === 'error') {
-      return unavailable(record, 'Arkesel returned no report for this message ID');
-    }
-    if (normalizePhone(data.recipient) !== record.phone) {
-      return unavailable(record, 'the report did not match this recipient');
-    }
-    switch (data.status) {
-      case 'DELIVERED':
-        return { ...record, status: 'delivered', detail: 'Arkesel confirmed delivery to the phone.' };
-      case 'NOT_DELIVERED':
-      case 'PROHIBITED':
-      case 'EXPIRED':
-        return { ...record, status: 'not_delivered', detail: `Arkesel delivery report: ${data.status}.` };
-      case 'SUBMITTED':
-      case 'QUEUED':
-        return { ...record, detail: `Arkesel: ${data.status}. Delivery is not confirmed yet.` };
-      default:
-        return unavailable(record, 'Arkesel returned an unrecognized delivery status');
-    }
-  });
 }
 
 async function adminToken() {
@@ -196,13 +229,20 @@ export async function handler(event) {
       const result = await fetchBounded(`${root}/${collection}?${params}`, { headers: auth(admin) });
       if (!result.ok) throw new Error('History read failed');
       const page = await result.json();
-      const key = process.env.BAJ_ARKESEL_API_KEY?.trim();
-      const records = await deliveryReports((page.documents || []).map(fields), key);
+      const records = (page.documents || []).map(fields);
       return json(200, { records, cursor: page.nextPageToken });
     }
 
+    if (payload.action === 'queue' && !testSms) {
+      stage = 'queueing and starting the SMS batch';
+      return await queueBatch(payload, uid, profile, collection, admin);
+    }
     const { driverId, requestId, phone } = payload;
     const officeSms = !testSms && payload.recipientType === 'office';
+    const { batchId } = payload;
+    if (batchId != null && (typeof batchId !== 'string' || !/^[a-f0-9]{32}$/.test(batchId))) {
+      return json(400, { error: 'Invalid SMS batch ID.' });
+    }
     const message = typeof payload.message === 'string' ? payload.message.trim() : '';
     if ((!testSms && !/^[\w-]{1,128}$/.test(driverId || '')) || !/^[a-f0-9]{32}$/.test(requestId || '') ||
         !message || message.length > 480) {
@@ -232,7 +272,8 @@ export async function handler(event) {
       recipientType: testSms ? 'test' : officeSms ? 'office' : 'driver',
       driverName: testSms ? 'Direct test SMS' : String(driver.fullName || (officeSms ? 'Office staff' : 'Driver')), phone: to,
       message, createdAt: new Date().toISOString(),
-      status: 'pending', detail: '', providerId: '',
+      ...(!testSms && batchId ? { batchId } : {}),
+      status: 'pending',
     };
     const created = await fetchBounded(`${root}/${collection}?documentId=${requestId}`, {
       method: 'POST', headers: { ...auth(admin), 'content-type': 'application/json' }, body: document(record),
@@ -240,15 +281,25 @@ export async function handler(event) {
     if (created.status === 409) return json(200, { record: await read(path, admin) });
     if (!created.ok) throw new Error('Could not create history record');
 
+    stage = 'sending and saving the result';
+    await sendRecord(path, record, admin);
+    return json(200, { record });
+  } catch {
+    console.error('BAJ SMS request failed during %s', stage);
+    return json(503, { error: `SMS service failed during ${stage}. Check history before sending again.` });
+  }
+}
+
+async function sendRecord(path, record, admin) {
+    const to = record.phone;
+    const { message } = record;
     const dryRun = process.env.BAJ_SMS_MODE !== 'live';
     const apiKey = process.env.BAJ_ARKESEL_API_KEY?.trim();
     const sender = process.env.BAJ_ARKESEL_SENDER_ID?.trim();
     if (dryRun) {
       record.status = 'preview';
-      record.detail = 'Recorded in preview mode. No SMS was sent.';
     } else if (!apiKey || !/^[A-Za-z0-9]{1,11}$/.test(sender || '')) {
       record.status = 'failed';
-      record.detail = 'BAJ SMS credentials or Sender ID are not configured.';
     } else {
       try {
         const response = await fetchBounded('https://sms.arkesel.com/api/v2/sms/send', {
@@ -256,39 +307,58 @@ export async function handler(event) {
           headers: { 'api-key': apiKey, 'content-type': 'application/json', accept: 'application/json' },
           body: JSON.stringify({ sender, message, recipients: [to], sandbox: false }),
         }, 12000);
-        const result = await response.json().catch((error) => {
-          if (error instanceof SyntaxError) return null;
-          throw error;
-        });
-        const accepted = acceptedProviderId(result?.data, to);
-        if (response.ok && result?.status === 'success' && accepted) {
-          record.status = 'accepted';
-          record.providerId = accepted;
-          record.detail = 'Arkesel accepted the SMS for delivery.';
-        } else if (response.status >= 500 || (response.ok && result?.status !== 'error')) {
-          record.status = 'unknown';
-          record.detail = 'Arkesel did not confirm the result. Check the provider before resending.';
+        record.httpStatus = String(response.status);
+        if (response.ok) {
+          delete record.status;
         } else {
-          record.status = 'failed';
-          record.detail = `Arkesel rejected the SMS (HTTP ${response.status}).`;
+          record.status = response.status >= 500 ? 'unknown' : 'failed';
         }
-      } catch (error) {
+        // Discard the response body; only the HTTP outcome is needed.
+        void response.body?.cancel().catch(() => {});
+      } catch {
         record.status = 'unknown';
-        const timedOut = ['TimeoutError', 'AbortError'].includes(error?.name);
-        record.detail = timedOut
-          ? 'Arkesel did not respond in time. The SMS may have arrived; check before resending.'
-          : 'Could not read the Arkesel response. The SMS may have arrived; check before resending.';
       }
     }
 
-    stage = 'saving the provider result';
     const updated = await fetchBounded(`${root}/${path}`, {
       method: 'PATCH', headers: { ...auth(admin), 'content-type': 'application/json' }, body: document(record),
     });
     if (!updated.ok) throw new Error('Could not save the provider result');
-    return json(200, { record });
-  } catch {
-    console.error('BAJ SMS request failed during %s', stage);
-    return json(503, { error: `SMS service failed during ${stage}. Check history before sending again.` });
-  }
+}
+
+export async function runQueuedBatch(event) {
+  if (event.httpMethod !== 'POST' || event.isBase64Encoded) return;
+  const body = event.body || '';
+  const signature = event.headers?.['x-baj-sms-signature'] || '';
+  if (!/^[a-f0-9]{64}$/.test(signature) ||
+      !timingSafeEqual(Buffer.from(signature, 'hex'), workerSignature(body))) return;
+  const { uid, ids, batchId, issuedAt } = JSON.parse(body);
+  if (!/^[\w-]{1,128}$/.test(uid) || !idPattern.test(batchId) ||
+      !Number.isFinite(issuedAt) || Date.now() - issuedAt > 15 * 60 * 1000 ||
+      !Array.isArray(ids) || ids.length > 200 || ids.some((id) => !idPattern.test(id))) return;
+  const admin = await adminToken();
+  await inChunks(ids, 5, async (id) => {
+    try {
+      const path = `users/${uid}/driverSmsHistory/${id}`;
+      const response = await fetchBounded(`${root}/${path}`, { headers: auth(admin) });
+      if (!response.ok) throw Error('Queued SMS read failed');
+      const doc = await response.json();
+      const record = fields(doc);
+      if (record.status !== 'queued' || record.batchId !== batchId || !doc.updateTime) return;
+      // Only one invocation can claim this record. Never auto-resend a claimed SMS.
+      const params = new URLSearchParams({
+        'updateMask.fieldPaths': 'status',
+        'currentDocument.updateTime': doc.updateTime,
+      });
+      const claim = await fetchBounded(`${root}/${path}?${params}`, {
+        method: 'PATCH', headers: { ...auth(admin), 'content-type': 'application/json' },
+        body: document({ status: 'processing' }),
+      });
+      if (claim.status === 409 || claim.status === 412 || claim.status === 400) return;
+      if (!claim.ok) throw Error('Queued SMS claim failed');
+      await sendRecord(path, record, admin);
+    } catch {
+      console.error('Could not finish a queued BAJ SMS record');
+    }
+  });
 }

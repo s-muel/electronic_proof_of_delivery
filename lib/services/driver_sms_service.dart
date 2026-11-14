@@ -6,8 +6,15 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class DriverSmsService {
+  static Object? displayStatus(Map<String, dynamic> record) {
+    final stored = record['status'];
+    if (stored != null) return stored; // Includes older records.
+    final code = int.tryParse(record['httpStatus']?.toString() ?? '');
+    return code != null && code >= 200 && code < 300 ? 'accepted' : null;
+  }
+
   static Future<Map<String, dynamic>> request({
-    Map<String, String>? data,
+    Map<String, dynamic>? data,
     String? cursor,
     bool officeDirectory = false,
   }) async {

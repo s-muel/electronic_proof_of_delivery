@@ -13,7 +13,7 @@ $projectRoot = $PSScriptRoot
 $npx = Get-Command npx.cmd -CommandType Application -ErrorAction Stop
 $names = @('BAJ_SMS_MODE', 'BAJ_SMS_FIREBASE_WEB_API_KEY',
     'BAJ_SMS_SERVICE_ACCOUNT_JSON', 'BAJ_ARKESEL_API_KEY', 'BAJ_ARKESEL_SENDER_ID',
-    'BAJ_SMS_ALLOW_TEST')
+    'BAJ_SMS_ALLOW_TEST', 'BAJ_SMS_WORKER_LOCAL_URL')
 $original = @{}
 foreach ($name in $names) {
     $original[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
@@ -68,6 +68,7 @@ try {
         }
     }
     $env:BAJ_SMS_MODE = $Mode
+    $env:BAJ_SMS_WORKER_LOCAL_URL = "http://localhost:$Port"
     $env:BAJ_SMS_ALLOW_TEST = if ($AllowTestSms) { 'true' } else { 'false' }
     Write-Host "Starting BAJ SMS in $Mode mode at http://localhost:$Port"
     $testDefine = if ($AllowTestSms) { ' --dart-define=BAJ_SMS_ALLOW_TEST=true' } else { '' }

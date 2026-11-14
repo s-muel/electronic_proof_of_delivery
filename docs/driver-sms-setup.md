@@ -6,7 +6,15 @@ shared message and all recipients. Enter any missing numbers or remove those
 recipients before sending.
 Saved phone numbers fill in automatically. If a driver has no linked number,
 enter a Ghana phone number for this message. This does not change the profile.
-Each recipient gets a separate history entry.
+Each bulk send gets one history card. **View** lists the individual recipient
+results. Older messages without a batch ID still appear as separate cards.
+Manager sends queue up to 200 recipients in Firestore before starting the
+Netlify background function. The browser can leave after the batch is
+acknowledged. Reopen or refresh SMS History to see the latest results.
+Deploy both functions to the same site; the local launcher supplies the
+local worker URL. Preview does not invoke the worker or Arkesel. If the
+queue request errors, retry the same batch in the composer. A record already
+claimed by the worker is not automatically resent if its outcome is uncertain.
 Use **Find office staff** to add active officers and managers from your own
 department. Their saved numbers fill in just like drivers' numbers. Super
 Users can add or update these numbers in **Users → Edit phone number**.
@@ -46,6 +54,9 @@ History is scoped to the signed-in manager and stored in
 `users/{managerUid}/driverSmsHistory/{requestId}`. Check the deployed Firestore
 rules before enabling live mode: clients should have no direct access to this
 subcollection. The function writes history through its service account and
-authorizes reads using the manager's Firebase session. An accepted SMS was
-accepted by Arkesel; it is not proof that the handset received it. If an
-attempt is pending or unconfirmed, check history and Arkesel before resending.
+authorizes reads using the manager's Firebase session. Successful sends store
+the HTTP status code as the only send outcome. The app displays 2xx as **Sent**.
+Previews and failed or unconfirmed attempts keep a separate status. Response bodies,
+message IDs, and delivery reports are not saved. **Sent** means the send
+request returned a successful HTTP code; handset delivery is not tracked.
+If an attempt is pending or unconfirmed, check Arkesel before resending.

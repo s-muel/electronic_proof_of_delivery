@@ -50,18 +50,17 @@ class _SuperUserTestSmsCardState extends State<SuperUserTestSmsCard> {
       final record = response['record'] as Map<String, dynamic>;
       setState(() {
         _pending = null;
-        _result = record['detail']?.toString().trim();
-        if (_result == null || _result!.isEmpty) {
-          _result = 'Attempt recorded. Check Arkesel before resending.';
-        }
-        final id = record['providerId']?.toString() ?? '';
-        if (id.isNotEmpty) _result = '$_result\nArkesel message ID: $id';
-        if ([
-          'accepted',
-          'preview',
-          'unknown',
-          'pending',
-        ].contains(record['status'])) {
+        final code = record['httpStatus']?.toString();
+        final status = DriverSmsService.displayStatus(record);
+        _result = switch (status) {
+          'accepted' => 'Message sent.',
+          'preview' => 'Preview saved. No SMS was sent.',
+          'failed' when code != null =>
+            'Message could not be sent (HTTP $code).',
+          'failed' => 'SMS sending is not configured.',
+          _ => 'Send could not be confirmed. Check before resending.',
+        };
+        if (['accepted', 'preview', 'unknown', 'pending'].contains(status)) {
           _message.clear();
         }
       });

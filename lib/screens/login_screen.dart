@@ -90,7 +90,10 @@ class _LoginScreenState extends State<LoginScreen> {
     } else if (role == 'management' || role == 'manager') {
       dashboard = const ManagementDashboard();
     } else if (role == 'manager_officer' || role == 'manager/officer') {
-      dashboard = const ManagerDashboard();
+      dashboard = ManagerDashboard(
+        transportNavigation:
+            appUser.department.trim().toLowerCase() == 'transport',
+      );
     } else if (role == 'super_user' ||
         role == 'super user' ||
         role == 'admin') {
@@ -263,7 +266,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 14),
                   const Text(
-                    'v 0.2.9',
+                    'v 0.3.0',
                     style: TextStyle(
                       color: Colors.black38,
                       fontSize: 10,
