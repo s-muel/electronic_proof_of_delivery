@@ -335,52 +335,50 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
             ),
           ],
         ),
-        if (isWideScreen) ...[
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _CompanySummaryPill(
-                label: 'Total Waybills',
-                value: _totalCount,
-                isEmphasized: true,
-                isLoading: openingCardKey == 'total',
-                onTap: _openAllWaybills,
-              ),
-              _CompanySummaryPill(
-                label: 'Pending',
-                value: _pendingCount,
-                isLoading: openingCardKey == 'pending',
-                onTap: _openPendingWaybills,
-              ),
-              _CompanySummaryPill(
-                label: 'Delivered',
-                value: _deliveredCount,
-                isLoading: openingCardKey == 'delivered',
-                onTap: _openDeliveredWaybills,
-              ),
-              _CompanySummaryPill(
-                label: 'Sent',
-                value: _sentForInvoicingCount,
-                isLoading: openingCardKey == 'sent',
-                onTap: _openSentForInvoicingWaybills,
-              ),
-              _CompanySummaryPill(
-                label: 'Invoiced',
-                value: _invoicedCount,
-                isLoading: openingCardKey == 'invoiced',
-                onTap: _openInvoicedWaybills,
-              ),
-              _CompanySummaryPill(
-                label: 'Rejected',
-                value: _rejectedCount,
-                isLoading: openingCardKey == 'issues',
-                onTap: _openRejectedWaybills,
-              ),
-            ],
-          ),
-        ],
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _CompanySummaryPill(
+              label: 'Total Waybills',
+              value: _totalCount,
+              isEmphasized: true,
+              isLoading: openingCardKey == 'total',
+              onTap: _openAllWaybills,
+            ),
+            _CompanySummaryPill(
+              label: 'Pending',
+              value: _pendingCount,
+              isLoading: openingCardKey == 'pending',
+              onTap: _openPendingWaybills,
+            ),
+            _CompanySummaryPill(
+              label: 'Delivered',
+              value: _deliveredCount,
+              isLoading: openingCardKey == 'delivered',
+              onTap: _openDeliveredWaybills,
+            ),
+            _CompanySummaryPill(
+              label: 'Sent',
+              value: _sentForInvoicingCount,
+              isLoading: openingCardKey == 'sent',
+              onTap: _openSentForInvoicingWaybills,
+            ),
+            _CompanySummaryPill(
+              label: 'Invoiced',
+              value: _invoicedCount,
+              isLoading: openingCardKey == 'invoiced',
+              onTap: _openInvoicedWaybills,
+            ),
+            _CompanySummaryPill(
+              label: 'Rejected',
+              value: _rejectedCount,
+              isLoading: openingCardKey == 'issues',
+              onTap: _openRejectedWaybills,
+            ),
+          ],
+        ),
         const SizedBox(height: 18),
         LayoutBuilder(
           builder: (context, constraints) {
