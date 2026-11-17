@@ -3,6 +3,7 @@ import { createHmac, createSign, timingSafeEqual } from 'node:crypto';
 const project = 'bajfreight-system';
 const root = `https://firestore.googleapis.com/v1/projects/${project}/databases/(default)/documents`;
 const roles = new Set(['manager_officer', 'manager/officer']);
+const officerRoles = new Set(['officer', 'officer in charge']);
 const officeRoles = new Set([...roles, 'officer', 'officer in charge', 'manager', 'management']);
 const department = (profile) => String(profile?.department ?? '').trim();
 const isOfficePeer = (member, sender) =>
@@ -186,10 +187,12 @@ export async function handler(event) {
       catch { return json(400, { error: 'Invalid message request.' }); }
     }
     const testSms = payload?.testSms === 'true';
-    if (profile?.isActive !== true || !(testSms ? superUserRoles : roles).has(role)) {
+    const canUseSms = roles.has(role) ||
+      (officerRoles.has(role) && department(profile).toLowerCase() === 'transport');
+    if (profile?.isActive !== true || !(testSms ? superUserRoles.has(role) : canUseSms)) {
       return json(403, { error: testSms
         ? 'Only active Super Users can send test SMS.'
-        : 'Only active Transport Managers can use driver SMS.' });
+        : 'Your account does not have access to SMS Notifier.' });
     }
     if (testSms && process.env.BAJ_SMS_ALLOW_TEST !== 'true') {
       return json(403, { error: 'Direct test SMS is not enabled on this server.' });

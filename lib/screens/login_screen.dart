@@ -8,6 +8,7 @@ import 'driver_dashboard.dart';
 import 'manager_dashboard.dart';
 import 'management_dashboard.dart';
 import 'officer_dashboard.dart';
+import 'procurement_dashboard.dart';
 import 'super_user_dashboard.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -82,7 +83,10 @@ class _LoginScreenState extends State<LoginScreen> {
     Widget dashboard;
 
     if (role == 'officer' || role == 'officer in charge') {
-      dashboard = const OfficerDashboard();
+      dashboard = OfficerDashboard(
+        transportNavigation:
+            appUser.department.trim().toLowerCase() == 'transport',
+      );
     } else if (role == 'driver') {
       dashboard = const DriverDashboard();
     } else if (role == 'accounts') {
@@ -103,6 +107,15 @@ class _LoginScreenState extends State<LoginScreen> {
         SnackBar(content: Text('Unsupported user role: ${appUser.role}')),
       );
       return;
+    }
+
+    final isProcurement =
+        appUser.department.trim().toLowerCase() == 'procurement';
+    if (isProcurement && role != 'driver') {
+      dashboard = ProcurementDashboard(
+        user: appUser,
+        existingDashboard: dashboard,
+      );
     }
 
     Navigator.pushReplacement(

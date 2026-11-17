@@ -359,6 +359,17 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
         .toSet();
     var selectedRole = user.role.trim().toLowerCase();
     var selectedIsDirector = user.isDirector;
+    var selectedDepartment = user.department;
+    final departments = {
+      if (user.department.isNotEmpty) user.department,
+      'Transport',
+      'CNF',
+      'Shipping',
+      'HeavyLift',
+      'QHSSE',
+      'Accounts',
+      'Procurement',
+    };
 
     if (!allowedRoleValues.contains(selectedRole)) {
       selectedRole = 'officer';
@@ -371,7 +382,8 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Reassign Role'),
+              title: const Text('Edit Role and Department'),
+              scrollable: true,
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -399,6 +411,28 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                       }
                     },
                   ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedDepartment.isEmpty
+                        ? null
+                        : selectedDepartment,
+                    decoration: const InputDecoration(
+                      labelText: 'Department',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      for (final department in departments)
+                        DropdownMenuItem(
+                          value: department,
+                          child: Text(department),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setDialogState(() => selectedDepartment = value);
+                      }
+                    },
+                  ),
                   if (selectedRole == 'management') ...[
                     const SizedBox(height: 12),
                     CheckboxListTile(
@@ -423,13 +457,15 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                 FilledButton(
                   onPressed:
                       selectedRole == user.role.trim().toLowerCase() &&
-                          selectedIsDirector == user.isDirector
+                          selectedIsDirector == user.isDirector &&
+                          selectedDepartment == user.department
                       ? null
                       : () => Navigator.pop(dialogContext, {
                           'role': selectedRole,
                           'isDirector': selectedIsDirector,
+                          'department': selectedDepartment,
                         }),
-                  child: const Text('Save Role'),
+                  child: const Text('Save'),
                 ),
               ],
             );
@@ -446,6 +482,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     await AppUserService.updateUser(
       user.copyWith(
         role: newRole,
+        department: roleUpdate['department'] as String,
         isDirector: newRole == 'management' && newIsDirector,
         updatedAt: DateTime.now().toIso8601String(),
       ),
@@ -456,7 +493,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Role updated for ${user.fullName}')),
+      SnackBar(content: Text('User updated for ${user.fullName}')),
     );
   }
 
@@ -610,6 +647,10 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
                               DropdownMenuItem(
                                 value: 'Accounts',
                                 child: Text('Accounts'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Procurement',
+                                child: Text('Procurement'),
                               ),
                             ],
                             onChanged: (value) {
@@ -2536,7 +2577,7 @@ class _SuperUserDashboardState extends State<SuperUserDashboard> {
           onPressed: () => _showReassignRoleDialog(user),
           icon: const Icon(Icons.manage_accounts),
           color: const Color(0xFF8FA0BC),
-          tooltip: 'Reassign Role',
+          tooltip: 'Edit Role and Department',
         ),
         IconButton(
           onPressed: () => _toggleUserActive(user),

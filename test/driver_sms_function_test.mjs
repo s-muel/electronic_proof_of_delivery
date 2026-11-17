@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { handler, runQueuedBatch } from '../netlify/functions/driver-sms.mjs';
 
-test('only manager-officers can record a preview, and a repeated request is not sent again', async (t) => {
+test('authorized staff can record a preview, and a repeated request is not sent again', async (t) => {
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
   t.mock.method(process, 'emitWarning', () => {});
   process.env.BAJ_SMS_MODE = 'preview';
@@ -14,6 +14,7 @@ test('only manager-officers can record a preview, and a repeated request is not 
     private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }),
   });
   let role = 'driver';
+  let senderDepartment = 'Transport';
   let saved;
   let savedPhone = '0240000000';
   let writes = 0;
@@ -74,7 +75,7 @@ test('only manager-officers can record a preview, and a repeated request is not 
     }
     if (path?.includes('/driverSmsBatches/')) return new Response(null, { status: 404 });
     if (address.pathname.endsWith('/users/manager-1')) {
-      return Response.json(doc({ role, isActive: true, fullName: 'Test Manager', department: 'Transport' }));
+      return Response.json(doc({ role, isActive: true, fullName: 'Test Manager', department: senderDepartment }));
     }
     const office = (department) => doc({
       role: 'officer', isActive: true, department, phoneNumber: '0240000000',
@@ -114,13 +115,17 @@ test('only manager-officers can record a preview, and a repeated request is not 
     }),
   };
   assert.equal((await handler(event)).statusCode, 403);
+  role = 'officer';
+  senderDepartment = 'Shipping';
+  assert.equal((await handler(event)).statusCode, 403);
   assert.equal(writes, 0);
-  role = 'manager_officer';
+  senderDepartment = 'Transport';
   const first = await handler(event);
   assert.equal(first.statusCode, 200);
   assert.equal(JSON.parse(first.body).record.status, 'preview');
   assert.equal(JSON.parse(first.body).record.phone, '233240000000');
   assert.equal(writes, 2);
+  role = 'manager_officer';
   assert.equal(JSON.parse((await handler(event)).body).record.status, 'preview');
   assert.equal(writes, 2);
   saved = undefined;

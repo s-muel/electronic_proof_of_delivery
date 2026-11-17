@@ -9,16 +9,31 @@ import '../utils/platform_flags.dart';
 import '../widgets/network_status_bar.dart';
 import 'login_screen.dart';
 import 'create_waybill_screen.dart';
+import 'manager_sms_screen.dart';
 import 'view_waybills_screen.dart';
 
 class OfficerDashboard extends StatefulWidget {
-  const OfficerDashboard({super.key});
+  const OfficerDashboard({super.key, this.transportNavigation = false});
+
+  final bool transportNavigation;
 
   @override
   State<OfficerDashboard> createState() => _OfficerDashboardState();
 }
 
 class _OfficerDashboardState extends State<OfficerDashboard> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+  var _section = _OfficerSection.dashboard;
+  bool _smsOpened = false;
+
+  void _selectSection(_OfficerSection section) {
+    _scaffoldKey.currentState?.closeDrawer();
+    setState(() {
+      _section = section;
+      if (section == _OfficerSection.sms) _smsOpened = true;
+    });
+  }
+
   int pendingCount = 0;
   int deliveredCount = 0;
   int invoicedCount = 0;
@@ -229,6 +244,38 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
     final summaryColumns = isWideScreen ? 4 : (isTablet ? 2 : 1);
     final actionColumns = isWideScreen ? 3 : (isTablet ? 2 : 1);
 
+    final waybillActions = GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: actionColumns,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      childAspectRatio: isWideScreen ? 3.2 : (isTablet ? 2.7 : 3.1),
+      children: [
+        _DashboardCard(
+          icon: Icons.note_add,
+          title: 'Create Waybill',
+          subtitle: 'Enter new waybill details',
+          color: Colors.blue,
+          onTap: () => _openCreateWaybill(context),
+        ),
+        _DashboardCard(
+          icon: Icons.list_alt,
+          title: 'View Waybills',
+          subtitle: 'View all created waybills',
+          color: Colors.indigo,
+          onTap: () => _openViewWaybills(context),
+        ),
+        _DashboardCard(
+          icon: Icons.report_problem,
+          title: 'Rejected Waybills',
+          subtitle: 'Review rejected waybills and notes',
+          color: Colors.red,
+          onTap: () => _openRejectedWaybills(context),
+        ),
+      ],
+    );
+
     final dashboardContent = RefreshIndicator(
       onRefresh: loadDashboardCounts,
       child: SingleChildScrollView(
@@ -336,54 +383,84 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
               ),
             ),
             const SizedBox(height: 12),
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: actionColumns,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: isWideScreen ? 3.2 : (isTablet ? 2.7 : 3.1),
-              children: [
-                _DashboardCard(
-                  icon: Icons.note_add,
-                  title: 'Create Waybill',
-                  subtitle: 'Enter new waybill details',
-                  color: Colors.blue,
-                  onTap: () => _openCreateWaybill(context),
-                ),
-                _DashboardCard(
-                  icon: Icons.list_alt,
-                  title: 'View Waybills',
-                  subtitle: 'View all created waybills',
-                  color: Colors.indigo,
-                  onTap: () => _openViewWaybills(context),
-                ),
-                _DashboardCard(
-                  icon: Icons.report_problem,
-                  title: 'Rejected Waybills',
-                  subtitle: 'Review rejected waybills and notes',
-                  color: Colors.red,
-                  onTap: () => _openRejectedWaybills(context),
-                ),
-              ],
-            ),
+            waybillActions,
           ],
         ),
       ),
     );
 
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: const Color(0xFFF4F7FB),
+      appBar: widget.transportNavigation && !isWideScreen
+          ? AppBar(title: Text(_section.label))
+          : null,
+      drawer: widget.transportNavigation && !isWideScreen
+          ? Drawer(child: _buildSidebar(context, inDrawer: true))
+          : null,
       body: Row(
         children: [
           if (isWideScreen) _buildSidebar(context),
-          Expanded(child: SafeArea(child: dashboardContent)),
+          Expanded(
+            child: SafeArea(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Offstage(
+                    offstage: _section != _OfficerSection.dashboard,
+                    child: dashboardContent,
+                  ),
+                  if (_section == _OfficerSection.waybills)
+                    ListView(
+                      padding: const EdgeInsets.all(20),
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _section.label,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.headlineSmall,
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Refresh waybill counts',
+                              icon: const Icon(Icons.refresh),
+                              onPressed: loadDashboardCounts,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        waybillActions,
+                      ],
+                    ),
+                  if (_section == _OfficerSection.fleet)
+                    const Center(
+                      child: Text('Fleet Management is coming soon.'),
+                    ),
+                  if (_section == _OfficerSection.purchaseRequests)
+                    const _PurchaseRequestWorkspace(),
+                  if (_smsOpened)
+                    Offstage(
+                      offstage: _section != _OfficerSection.sms,
+                      child: const ManagerSmsScreen(embedded: true),
+                    ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSidebar(BuildContext context) {
+  Widget _buildSidebar(BuildContext context, {bool inDrawer = false}) {
+    void navigate(VoidCallback action) {
+      if (inDrawer) _scaffoldKey.currentState?.closeDrawer();
+      action();
+    }
+
     return Container(
       width: 214,
       decoration: const BoxDecoration(
@@ -436,33 +513,73 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
                 ],
               ),
               const SizedBox(height: 28),
-              _SidebarItem(
-                icon: Icons.dashboard_customize,
-                label: 'Dashboard',
-                isActive: true,
-                onTap: () {},
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    _SidebarItem(
+                      icon: Icons.dashboard_customize,
+                      label: 'Dashboard',
+                      isActive: _section == _OfficerSection.dashboard,
+                      onTap: () => _selectSection(_OfficerSection.dashboard),
+                    ),
+                    if (!widget.transportNavigation) ...[
+                      _SidebarItem(
+                        icon: Icons.note_add,
+                        label: 'Create Waybill',
+                        onTap: () =>
+                            navigate(() => _openCreateWaybill(context)),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.list_alt,
+                        label: 'View Waybills',
+                        onTap: () => navigate(() => _openViewWaybills(context)),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.report_problem,
+                        label: 'Rejected',
+                        onTap: () =>
+                            navigate(() => _openRejectedWaybills(context)),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.refresh,
+                        label: 'Refresh',
+                        onTap: () => navigate(() {
+                          _selectSection(_OfficerSection.dashboard);
+                          loadDashboardCounts();
+                        }),
+                      ),
+                    ],
+                    if (widget.transportNavigation) ...[
+                      _SidebarItem(
+                        icon: Icons.inventory_2_outlined,
+                        label: _OfficerSection.waybills.label,
+                        isActive: _section == _OfficerSection.waybills,
+                        onTap: () => _selectSection(_OfficerSection.waybills),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.local_shipping_outlined,
+                        label: _OfficerSection.fleet.label,
+                        isActive: _section == _OfficerSection.fleet,
+                        onTap: () => _selectSection(_OfficerSection.fleet),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.request_quote_outlined,
+                        label: _OfficerSection.purchaseRequests.label,
+                        isActive: _section == _OfficerSection.purchaseRequests,
+                        onTap: () =>
+                            _selectSection(_OfficerSection.purchaseRequests),
+                      ),
+                      _SidebarItem(
+                        icon: Icons.sms_outlined,
+                        label: _OfficerSection.sms.label,
+                        isActive: _section == _OfficerSection.sms,
+                        onTap: () => _selectSection(_OfficerSection.sms),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              _SidebarItem(
-                icon: Icons.note_add,
-                label: 'Create Waybill',
-                onTap: () => _openCreateWaybill(context),
-              ),
-              _SidebarItem(
-                icon: Icons.list_alt,
-                label: 'View Waybills',
-                onTap: () => _openViewWaybills(context),
-              ),
-              _SidebarItem(
-                icon: Icons.report_problem,
-                label: 'Rejected',
-                onTap: () => _openRejectedWaybills(context),
-              ),
-              _SidebarItem(
-                icon: Icons.refresh,
-                label: 'Refresh',
-                onTap: loadDashboardCounts,
-              ),
-              const Spacer(),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
@@ -507,6 +624,36 @@ class _OfficerDashboardState extends State<OfficerDashboard> {
       ),
     );
   }
+}
+
+enum _OfficerSection {
+  dashboard('Dashboard'),
+  waybills('Waybill Management'),
+  fleet('Fleet Management'),
+  purchaseRequests('PR Manager'),
+  sms('SMS Notifier');
+
+  const _OfficerSection(this.label);
+  final String label;
+}
+
+class _PurchaseRequestWorkspace extends StatelessWidget {
+  const _PurchaseRequestWorkspace();
+
+  @override
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.all(20),
+    children: [
+      Text(
+        'Purchase Requisitions',
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
+      const SizedBox(height: 8),
+      const Text(
+        'Purchase requisition creation and approvals are coming soon.',
+      ),
+    ],
+  );
 }
 
 class _SidebarItem extends StatelessWidget {
